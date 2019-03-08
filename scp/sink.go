@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"os"
 
 	"github.com/rs/xid"
 	"golang.org/x/crypto/ssh"
@@ -31,15 +32,30 @@ func NewSink(c ssh.Channel) *Sink {
 // WriteTo implements the default golang WriterTo interface
 // It will read the files from the remote client and pack them up in zip format
 func (s *Sink) WriteTo(w io.Writer) (int64, error) {
-	var bytesWritten int64
+	s.Pack(&Test{})
+	w.Write([]byte("blarh blarh"))
+	return 0, nil
+}
 
-	item, err := s.Next()
+type Test struct {
+}
+
+func (t *Test) File(name string, mode os.FileMode, r io.Reader) error {
+	d, err := ioutil.ReadAll(r)
 	if err != nil {
-		return bytesWritten, fmt.Errorf("unable to get next scp item: %s", err)
+		log.Fatalf("TestError: %s", err)
 	}
+	log.Printf("Test: read file %s, with content %s", name, d)
 
-	log.Printf("Item: %+v", item)
-	itemData, _ := ioutil.ReadAll(item)
-	log.Printf("ItemData: %s", string(itemData))
-	return bytesWritten, nil
+	return nil
+}
+
+func (t *Test) Enter(name string, mode os.FileMode) error {
+	log.Printf("Test: Creating directory %s with mode %s", name, mode)
+	return nil
+}
+
+func (t *Test) Leave() error {
+	log.Printf("Test: Leaving")
+	return nil
 }

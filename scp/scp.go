@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -14,87 +13,96 @@ type ScpStream struct {
 	io.Writer
 	*bufio.Reader
 }
-type Item struct {
-	io.Reader
-	Name      string
-	Mode      os.FileMode
-	Length    int64
-	Directory bool
+
+type Type int
+
+const (
+	Unsupported Type = iota
+	Create
+	Directory
+	Leave
+)
+
+type Command struct {
+	Name   string
+	Mode   os.FileMode
+	Length int64
+	Type   Type
 }
 
-type ScpCommand struct {
-	raw    []byte
-	fields []string
+type Packer interface {
+	File(string, os.FileMode, io.Reader) error
+	Enter(string, os.FileMode) error
+	Leave() error1
 }
 
-func NewScpCommand(input []byte) *ScpCommand {
-	return &ScpCommand{raw: input, fields: strings.Fields(string(input))}
-}
-
-func (s *ScpCommand) File() bool {
-	if s.raw[0] == 'C' {
-		return true
+func (c *Command) Parse(raw []byte) error {
+	c.Type = Unsupported
+	// Determinane what type of Command we are dealing with
+	if raw[0] == 'C' {
+		c.Type = Create
 	}
-	return false
-}
-
-func (s *ScpCommand) Directory() bool {
-	if s.raw[0] == 'D' {
-		return true
+	if raw[0] == 'D' {
+		c.Type = Directory
 	}
-	return false
-}
 
-func (s *ScpCommand) Name() string {
-	return strings.Trim(s.fields[2], "\n\r\x0A")
-}
+	if c.Type == Unsupported {
+		return fmt.Errorf("unsupported scp command: %s", string(raw[0]))
+	}
 
-func (s *ScpCommand) Mode() os.FileMode {
-	i64, err := strconv.ParseUint(string(s.raw[1:4]), 10, 32)
+	i64, err := strconv.ParseUint(string(raw[1:4]), 10, 32)
 	if err != nil {
-		log.Printf("ScpCommand: unable to parse file mode from %s: %s", string(s.raw[1:4]), err)
-		return os.FileMode(0667)
+		return fmt.Errorf("unable to parse file mode from %s: %s", string(raw[1:4]), err)
 	}
-	return os.FileMode(uint32(i64))
-}
+	c.Mode = os.FileMode(uint32(i64))
 
-func (s ScpCommand) Length() int64 {
-	l, err := strconv.ParseInt(s.fields[1], 10, 64)
+	// split by space into fields for Name and Length
+	fields := strings.Fields(string(raw))
+	c.Name = strings.Trim(fields[2], "\n\r\x0A")
+
+	l, err := strconv.ParseInt(fields[1], 10, 64)
 	if err != nil {
-		log.Printf("ScpCommand: unable to parse file length: %s", err)
+		return fmt.Errorf("unable to parse file length: %s", err)
 	}
-	return l
+	c.Length = l
+
+	return nil
 }
 
-func (s *ScpStream) Next() (*Item, error) {
-	// ask scp client to advance
-	s.Write([]byte{0x00})
+// Pack reads files from an scp client and packs them with Packer
+func (s *ScpStream) Pack(p Packer) error {
+	// ask remote client to advance
+	_, err := s.Write([]byte{0x00})
+	if err != nil {
+		return fmt.Errorf("unable to advance remote scp client: %s", err)
+	}
 
 	// an scp command looks something like this
 	//   C0664 352 test-node-ssl-js<0x0A || LineFeed>
-	raw, err := s.ReadBytes(byte(0x0A))
+	var c Command
+	line, err := s.ReadBytes(byte(0x0A))
 	if err != nil && err != io.EOF {
-		return nil, fmt.Errorf("ScpScream: unable to find next scp command: %s", err)
+		return fmt.Errorf("unable to find next scp command: %s", err)
 	}
 
-	scpCommand := NewScpCommand(raw)
-
-	// Other scp commands exists - such as methods to set access times and modified times
-	// but we dont care about these for now
-	if !scpCommand.File() && !scpCommand.Directory() {
-		log.Printf("Not a file or directory:", scpCommand.File(), scpCommand.Directory())
-		return s.Next()
+	err = c.Parse(line)
+	if err != nil {
+		return fmt.Errorf("unable to parse scp command: %s", err)
 	}
 
-	i := Item{
-		Directory: scpCommand.Directory(),
-		Name:      scpCommand.Name(),
-		Mode:      scpCommand.Mode(),
-		Length:    scpCommand.Length(),
+	switch c.Type {
+	case Create:
+		// ask remote client to send file
+		_, err := s.Write([]byte{0x00})
+		if err != nil {
+			return fmt.Errorf("unable to advance remote scp client: %s", err)
+		}
+		p.File(c.Name, c.Mode, io.LimitReader(s, c.Length))
+	case Directory:
+		p.Enter(c.Name, c.Mode)
+	case Leave:
+		p.Leave()
 	}
-	i.Reader = io.LimitReader(s, i.Length)
 
-	// ask scp client to advance
-	s.Write([]byte{0x00})
-	return &i, nil
+	return nil
 }
