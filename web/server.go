@@ -57,7 +57,7 @@ func (s *Server) Sink(w http.ResponseWriter, r *http.Request) {
 
 	n, err := sink.WriteTo(w)
 	if err != nil {
-		log.Printf("HTTP: failed to sink data to %s", r.RemoteAddr)
+		log.Printf("HTTP: failed to sink data to %s: %s", r.RemoteAddr, err)
 	}
 
 	log.Printf("HTTP: wrote %d bytes to %s", n, r.RemoteAddr)

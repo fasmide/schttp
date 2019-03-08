@@ -33,6 +33,7 @@ func (s *Server) Sink(id string) (io.WriterTo, error) {
 	defer s.Unlock()
 
 	if sink, exists := s.sinks[id]; exists {
+		delete(s.sinks, id)
 		return sink, nil
 	}
 	return nil, fmt.Errorf("%s does not exist", id)
@@ -43,6 +44,7 @@ func (s *Server) Source(id string) (io.ReaderFrom, error) {
 	defer s.Unlock()
 
 	if source, exists := s.sources[id]; exists {
+		delete(s.sources, id)
 		return source, nil
 	}
 	return nil, fmt.Errorf("%s does not exist", id)
@@ -132,13 +134,16 @@ func (s *Server) acceptSCP(c net.Conn, sshc *ssh.ServerConfig) {
 				// so - the first 4 bytes are ... i dont know ...
 				payload := string(req.Payload[4:])
 
-				// TODO: Parse "scp -t" efter "scp" og "-t"
+				// does the command start with scp ?
+				if !strings.HasPrefix(payload, "scp") {
+					req.Reply(false, nil)
+					continue
+				}
 
-				// also: locking
 				// sink (accept files)
-				if strings.HasPrefix(payload, "scp -t") {
+				if strings.Index(payload, "-t") >= 0 {
 					sink := NewSink(channel)
-					log.Printf("Sink from %s", c.RemoteAddr().String())
+					log.Printf("Sink from %s, with id %s", c.RemoteAddr().String(), sink.ID.String())
 
 					s.Lock()
 					s.sinks[sink.ID.String()] = sink
@@ -149,16 +154,20 @@ func (s *Server) acceptSCP(c net.Conn, sshc *ssh.ServerConfig) {
 				}
 
 				// source (send files)
-				if strings.HasPrefix(payload, "scp -f") {
-					log.Printf("Source from %s", c.RemoteAddr().String())
+				if strings.Index(payload, "-f") >= 0 {
 					source := NewSource(channel)
+					log.Printf("Source from %s, with id %s", c.RemoteAddr().String(), source.ID.String())
+
+					s.Lock()
 					s.sources[source.ID.String()] = source
+					s.Unlock()
+
 					req.Reply(true, nil)
 					continue
 				}
 
 				// default
-				log.Printf("I have no idea what to do with: %+v: %s", req, payload)
+				log.Printf("unable to handle scp requests without -t or -f: \"%s\"", payload)
 				req.Reply(false, nil)
 			}
 		}(requests)
