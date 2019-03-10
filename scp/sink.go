@@ -32,8 +32,13 @@ func NewSink(c ssh.Channel) *Sink {
 // WriteTo implements the default golang WriterTo interface
 // It will read the files from the remote client and pack them up in zip format
 func (s *Sink) WriteTo(w io.Writer) (int64, error) {
-	s.Pack(&Test{})
-	w.Write([]byte("blarh blarh"))
+
+	err := s.Pack(&Test{})
+	if err != nil && err != io.EOF {
+		log.Printf("Sink error: %s", err)
+	}
+	s.channel.Close()
+
 	return 0, nil
 }
 
@@ -55,7 +60,7 @@ func (t *Test) Enter(name string, mode os.FileMode) error {
 	return nil
 }
 
-func (t *Test) Leave() error {
+func (t *Test) Exit() error {
 	log.Printf("Test: Leaving")
 	return nil
 }

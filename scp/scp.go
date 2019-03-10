@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -20,7 +21,7 @@ const (
 	Unsupported Type = iota
 	Create
 	Directory
-	Leave
+	Exit
 )
 
 type Command struct {
@@ -33,7 +34,7 @@ type Command struct {
 type Packer interface {
 	File(string, os.FileMode, io.Reader) error
 	Enter(string, os.FileMode) error
-	Leave() error1
+	Exit() error
 }
 
 func (c *Command) Parse(raw []byte) error {
@@ -45,9 +46,16 @@ func (c *Command) Parse(raw []byte) error {
 	if raw[0] == 'D' {
 		c.Type = Directory
 	}
+	if raw[0] == 'E' {
+		c.Type = Exit
+		c.Name = ""
+		c.Mode = os.FileMode(0)
+		c.Length = 0
+		return nil
+	}
 
 	if c.Type == Unsupported {
-		return fmt.Errorf("unsupported scp command: %s", string(raw[0]))
+		return fmt.Errorf("unsupported scp command: \"%s\" %x", string(raw), raw)
 	}
 
 	i64, err := strconv.ParseUint(string(raw[1:4]), 10, 32)
@@ -69,40 +77,61 @@ func (c *Command) Parse(raw []byte) error {
 	return nil
 }
 
-// Pack reads files from an scp client and packs them with Packer
+// Pack reads files from an scp client and packs them with a given Packer
 func (s *ScpStream) Pack(p Packer) error {
-	// ask remote client to advance
-	_, err := s.Write([]byte{0x00})
-	if err != nil {
-		return fmt.Errorf("unable to advance remote scp client: %s", err)
-	}
 
-	// an scp command looks something like this
-	//   C0664 352 test-node-ssl-js<0x0A || LineFeed>
-	var c Command
-	line, err := s.ReadBytes(byte(0x0A))
-	if err != nil && err != io.EOF {
-		return fmt.Errorf("unable to find next scp command: %s", err)
-	}
+	for {
 
-	err = c.Parse(line)
-	if err != nil {
-		return fmt.Errorf("unable to parse scp command: %s", err)
-	}
-
-	switch c.Type {
-	case Create:
-		// ask remote client to send file
+		// ask remote client to advance
 		_, err := s.Write([]byte{0x00})
 		if err != nil {
 			return fmt.Errorf("unable to advance remote scp client: %s", err)
 		}
-		p.File(c.Name, c.Mode, io.LimitReader(s, c.Length))
-	case Directory:
-		p.Enter(c.Name, c.Mode)
-	case Leave:
-		p.Leave()
+		// an scp command looks something like this
+		//   C0664 352 test-node-ssl-js<0x0A || LineFeed>
+		var c Command
+		line, err := s.ReadBytes(byte(0x0A))
+
+		// we are finished
+		if err == io.EOF {
+			return err
+		}
+
+		if err != nil {
+			return fmt.Errorf("unable to find next scp command: %s", err)
+		}
+
+		err = c.Parse(line)
+		if err != nil {
+			return fmt.Errorf("unable to parse scp command: %s", err)
+		}
+
+		log.Printf("had more command: %s", string(line))
+		switch c.Type {
+		case Create:
+			// ask remote client to send file
+			_, err := s.Write([]byte{0x00})
+			if err != nil {
+				return fmt.Errorf("unable to advance remote scp client: %s", err)
+			}
+
+			// Pack the file
+			p.File(c.Name, c.Mode, io.LimitReader(s, c.Length))
+
+			// the client will send a NUL after sending a file
+			b, err := s.ReadByte()
+			if err != nil {
+				return fmt.Errorf("unable to read advance NUL byte: %s", err)
+			}
+			if b != 0x00 {
+				return fmt.Errorf("advance NUL byte was not NUL: it was %x", b)
+			}
+
+		case Directory:
+			p.Enter(c.Name, c.Mode)
+		case Exit:
+			p.Exit()
+		}
 	}
 
-	return nil
 }
