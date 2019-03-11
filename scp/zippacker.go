@@ -4,7 +4,6 @@ import (
 	"archive/zip"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path"
 	"strings"
@@ -35,13 +34,10 @@ func (z *ZipPacker) File(name string, mode os.FileMode, r io.Reader) error {
 
 func (z *ZipPacker) Enter(name string, mode os.FileMode) error {
 	z.Path = path.Join(z.Path, name)
-	log.Printf("ZipPacker: Creating directory %s with mode %s", name, mode)
 	return nil
 }
 
 func (z *ZipPacker) Exit() error {
-
-	log.Printf("ZipPacker: Leaving %s", z.Path)
 	parts := strings.Split(z.Path, "/")
 	z.Path = path.Join(parts[0 : len(parts)-1]...)
 	return nil

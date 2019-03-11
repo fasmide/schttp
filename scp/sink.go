@@ -4,9 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
-	"os"
 
 	"github.com/rs/xid"
 	"golang.org/x/crypto/ssh"
@@ -32,40 +30,22 @@ func NewSink(c ssh.Channel) *Sink {
 // WriteTo implements the default golang WriterTo interface
 // It will read the files from the remote client and pack them up in zip format
 func (s *Sink) WriteTo(w io.Writer) (int64, error) {
-
 	z := NewZipPacker(w)
+
 	err := s.Pack(z)
 	if err != nil && err != io.EOF {
 		log.Printf("Sink error: %s", err)
 	}
-	s.channel.Close()
+
+	err = s.channel.Close()
+	if err != nil {
+		log.Printf("unable to close ssh channel: %s", err)
+	}
+
 	err = z.Close()
 	if err != nil {
 		log.Printf("could not close zip packer: %s", err)
 	}
-	w.Write([]byte("You should have received zip file"))
+
 	return 0, nil
-}
-
-type Test struct {
-}
-
-func (t *Test) File(name string, mode os.FileMode, r io.Reader) error {
-	d, err := ioutil.ReadAll(r)
-	if err != nil {
-		log.Fatalf("TestError: %s", err)
-	}
-	log.Printf("Test: read file %s, with content %s", name, d)
-
-	return nil
-}
-
-func (t *Test) Enter(name string, mode os.FileMode) error {
-	log.Printf("Test: Creating directory %s with mode %s", name, mode)
-	return nil
-}
-
-func (t *Test) Exit() error {
-	log.Printf("Test: Leaving")
-	return nil
 }
