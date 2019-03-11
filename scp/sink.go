@@ -33,12 +33,17 @@ func NewSink(c ssh.Channel) *Sink {
 // It will read the files from the remote client and pack them up in zip format
 func (s *Sink) WriteTo(w io.Writer) (int64, error) {
 
-	err := s.Pack(&Test{})
+	z := NewZipPacker(w)
+	err := s.Pack(z)
 	if err != nil && err != io.EOF {
 		log.Printf("Sink error: %s", err)
 	}
 	s.channel.Close()
-
+	err = z.Close()
+	if err != nil {
+		log.Printf("could not close zip packer: %s", err)
+	}
+	w.Write([]byte("You should have received zip file"))
 	return 0, nil
 }
 

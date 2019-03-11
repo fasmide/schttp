@@ -79,7 +79,7 @@ func (c *Command) Parse(raw []byte) error {
 
 // Pack reads files from an scp client and packs them with a given Packer
 func (s *ScpStream) Pack(p Packer) error {
-
+	// until something returns...
 	for {
 
 		// ask remote client to advance

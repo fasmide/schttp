@@ -49,11 +49,11 @@ func (s *Server) Sink(w http.ResponseWriter, r *http.Request) {
 	id := path.Base(r.URL.Path)
 	sink, err := s.DB.Sink(id)
 	if err != nil {
-		// the only error awailable from Sink is a 404 style error
+		// the only error available from Sink is a 404 style error
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	log.Printf("%s sinks %s, and this sink exists", r.RemoteAddr, r.URL.Path)
+	log.Printf("%s sinks %s", r.RemoteAddr, r.URL.Path)
 
 	n, err := sink.WriteTo(w)
 	if err != nil {
