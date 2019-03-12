@@ -5,6 +5,9 @@ After=network.target
 [Service]
 Type=simple
 ExecStart=/root/schttp
+Environment=ADVERTISE-URL=http://scp.click/
+Environment=HTTP-LISTEN=0.0.0.0:80
+Environment=SSH-LISTEN=0.0.0.0:22
 
 [Install]
 WantedBy=multi-user.target
