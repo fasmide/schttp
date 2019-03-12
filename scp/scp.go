@@ -76,8 +76,9 @@ func (c *Command) Parse(raw []byte) error {
 	// split by space into fields for Name and Length
 	fields := strings.Fields(string(raw))
 
-	// Name is the third field
-	c.Name = strings.Trim(fields[2], "\n\r\x0A")
+	// Name is the third field and beyond
+	// TODO: dont use Fields - use some kind of ReadUntil or something
+	c.Name = strings.Trim(strings.Join(fields[2:], " "), "\n\r\x0A")
 
 	l, err := strconv.ParseInt(fields[1], 10, 64)
 	if err != nil {
