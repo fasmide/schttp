@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -66,6 +65,8 @@ func (c *Command) Parse(raw []byte) error {
 
 	// split by space into fields for Name and Length
 	fields := strings.Fields(string(raw))
+
+	// Name is the third field
 	c.Name = strings.Trim(fields[2], "\n\r\x0A")
 
 	l, err := strconv.ParseInt(fields[1], 10, 64)
@@ -106,7 +107,6 @@ func (s *ScpStream) Pack(p Packer) error {
 			return fmt.Errorf("unable to parse scp command: %s", err)
 		}
 
-		log.Printf("had more command: %s", string(line))
 		switch c.Type {
 		case Create:
 			// ask remote client to send file
