@@ -1,13 +1,14 @@
 [Unit]
-Description=schttp
+Description=schttp - runs scp.click
 After=network.target
 
 [Service]
-Type=simple
 ExecStart=/root/schttp
-Environment=ADVERTISE-URL=http://scp.click/
-Environment=HTTP-LISTEN=0.0.0.0:80
-Environment=SSH-LISTEN=0.0.0.0:22
+WorkingDirectory=/root
+
+Environment="ADVERTISE_URL"=http://scp.click/
+Environment="HTTP_LISTEN"=0.0.0.0:80
+Environment="SSH_LISTEN"=0.0.0.0:22
 
 [Install]
 WantedBy=multi-user.target

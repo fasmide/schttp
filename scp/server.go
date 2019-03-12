@@ -14,7 +14,7 @@ import (
 )
 
 func init() {
-	viper.SetDefault("SSH-LISTEN", "0.0.0.0:2222")
+	viper.SetDefault("SSH_LISTEN", "0.0.0.0:2222")
 }
 
 type Server struct {
@@ -77,7 +77,7 @@ func (s *Server) Listen() {
 
 	config.AddHostKey(hostkey)
 
-	listener, err := net.Listen("tcp", viper.GetString("SSH-LISTEN"))
+	listener, err := net.Listen("tcp", viper.GetString("SSH_LISTEN"))
 
 	log.Printf("SSH: listening on %s", listener.Addr().String())
 	if err != nil {

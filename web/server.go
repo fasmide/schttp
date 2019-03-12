@@ -11,8 +11,8 @@ import (
 )
 
 func init() {
-	viper.SetDefault("HTTP-LISTEN", "0.0.0.0:8080")
-	viper.SetDefault("ADVERTISE-URL", "http://localhost:8080/")
+	viper.SetDefault("HTTP_LISTEN", "0.0.0.0:8080")
+	viper.SetDefault("ADVERTISE_URL", "http://localhost:8080/")
 
 }
 
@@ -37,7 +37,7 @@ func (s *Server) Listen() {
 	s.HandleFunc("/source/", s.Source)
 
 	// Setup listener
-	l, err := net.Listen("tcp", viper.GetString("HTTP-LISTEN"))
+	l, err := net.Listen("tcp", viper.GetString("HTTP_LISTEN"))
 	if err != nil {
 		log.Fatalf("HTTP: unable to listen on %s: %s", l.Addr().String(), err)
 	}
