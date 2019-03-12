@@ -6,9 +6,9 @@ After=network.target
 ExecStart=/root/schttp
 WorkingDirectory=/root
 
-Environment="ADVERTISE_URL"=http://scp.click/
-Environment="HTTP_LISTEN"=0.0.0.0:80
-Environment="SSH_LISTEN"=0.0.0.0:22
+Environment=ADVERTISE_URL=http://scp.click/
+Environment=HTTP_LISTEN=0.0.0.0:80
+Environment=SSH_LISTEN=0.0.0.0:22
 
 [Install]
 WantedBy=multi-user.target
