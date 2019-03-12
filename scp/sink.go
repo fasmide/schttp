@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"path"
 
 	"github.com/rs/xid"
+	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -22,7 +24,7 @@ func NewSink(c ssh.Channel) *Sink {
 	s := &Sink{ID: xid.New(), channel: c, ScpStream: &ScpStream{Writer: c, Reader: bufio.NewReader(c)}}
 
 	// say hello to our customer
-	c.Stderr().Write([]byte(fmt.Sprintf("Velkommen, du har id %s\n", s.ID.String())))
+	c.Stderr().Write([]byte(fmt.Sprintf("[scp.click] Download from %s%s\n", viper.GetString("ADVERTISE-URL"), path.Join("sink", s.ID.String()))))
 
 	return s
 }
@@ -38,23 +40,28 @@ func (s *Sink) WriteTo(w io.Writer) (int64, error) {
 
 		// indicate to the remote scp client we have failed
 		_, _ = s.channel.SendRequest("exit-status", false, ssh.Marshal(&ExitStatus{Status: 1}))
-	} else {
 
-		// indicate to remote scp client we have succeded
-		_, _ = s.channel.SendRequest("exit-status", false, ssh.Marshal(&ExitStatus{Status: 0}))
+		// close stuff
+		_ = s.channel.Close()
+		_ = z.Close()
+		return 0, err
 
-	}
-
-	// close up
-	err = s.channel.Close()
-	if err != nil {
-		log.Printf("unable to close ssh channel: %s", err)
 	}
 
 	err = z.Close()
 	if err != nil {
-		log.Printf("could not close zip packer: %s", err)
+		log.Printf("Sink error: could not close zip file: %s", err)
+		// indicate to the remote scp client we have failed
+		_, _ = s.channel.SendRequest("exit-status", false, ssh.Marshal(&ExitStatus{Status: 1}))
+
+		// close stuff
+		_ = s.channel.Close()
+		_ = z.Close()
 	}
+
+	// indicate to remote scp client we have succeded
+	_, _ = s.channel.SendRequest("exit-status", false, ssh.Marshal(&ExitStatus{Status: 0}))
+	_ = s.channel.Close()
 
 	// its really not true zero bytes where written
 	return 0, nil
