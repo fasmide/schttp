@@ -35,8 +35,17 @@ func (s *Sink) WriteTo(w io.Writer) (int64, error) {
 	err := s.Pack(z)
 	if err != nil && err != io.EOF {
 		log.Printf("Sink error: %s", err)
+
+		// indicate to the remote scp client we have failed
+		_, _ = s.channel.SendRequest("exit-status", false, ssh.Marshal(&ExitStatus{Status: 1}))
+	} else {
+
+		// indicate to remote scp client we have succeded
+		_, _ = s.channel.SendRequest("exit-status", false, ssh.Marshal(&ExitStatus{Status: 0}))
+
 	}
 
+	// close up
 	err = s.channel.Close()
 	if err != nil {
 		log.Printf("unable to close ssh channel: %s", err)
@@ -47,5 +56,6 @@ func (s *Sink) WriteTo(w io.Writer) (int64, error) {
 		log.Printf("could not close zip packer: %s", err)
 	}
 
+	// its really not true zero bytes where written
 	return 0, nil
 }

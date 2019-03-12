@@ -58,7 +58,7 @@ func (c *Command) Parse(raw []byte) error {
 		return fmt.Errorf("unsupported scp command: \"%s\" %x", string(raw), raw)
 	}
 
-	i64, err := strconv.ParseUint(string(raw[1:4]), 10, 32)
+	i64, err := strconv.ParseUint(string(raw[1:4]), 8, 32)
 	if err != nil {
 		return fmt.Errorf("unable to parse file mode from %s: %s", string(raw[1:4]), err)
 	}
@@ -116,7 +116,11 @@ func (s *ScpStream) Pack(p Packer) error {
 			}
 
 			// Pack the file
-			p.File(c.Name, c.Mode, io.LimitReader(s, c.Length))
+			err = p.File(c.Name, c.Mode, io.LimitReader(s, c.Length))
+
+			if err != nil {
+				return fmt.Errorf("unable to pack: %s", err)
+			}
 
 			// the client will send a NUL after sending a file
 			b, err := s.ReadByte()

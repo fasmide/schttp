@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 )
 
 type ZipPacker struct {
@@ -19,7 +20,10 @@ func NewZipPacker(w io.Writer) *ZipPacker {
 }
 
 func (z *ZipPacker) File(name string, mode os.FileMode, r io.Reader) error {
-	fd, err := z.Create(path.Join(z.Path, name))
+	fd, err := z.CreateHeader(&zip.FileHeader{
+		Name:     path.Join(z.Path, name),
+		Modified: time.Now(),
+	})
 	if err != nil {
 		return fmt.Errorf("unable to create file: %s", err)
 	}

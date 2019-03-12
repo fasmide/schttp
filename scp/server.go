@@ -140,6 +140,11 @@ func (s *Server) acceptSCP(c net.Conn, sshc *ssh.ServerConfig) {
 					continue
 				}
 
+				// if the user specified "-p" tell him it wont do anything
+				if strings.Index(payload, "-p") >= 0 {
+					fmt.Fprint(channel.Stderr(), "[scp.click] You seem to have specified -p (preserve create and modified time) - this is ignored\n")
+				}
+
 				// sink (accept files)
 				if strings.Index(payload, "-t") >= 0 {
 					sink := NewSink(channel)
