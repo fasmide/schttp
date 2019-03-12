@@ -72,13 +72,14 @@ func (s *Server) Listen() {
 		PublicKeyCallback: func(c ssh.ConnMetadata, pubKey ssh.PublicKey) (*ssh.Permissions, error) {
 			return nil, nil
 		},
-		ServerVersion: "SSH-2.0-SCHTTP",
+		ServerVersion: "SSH-2.0-scp.click",
 	}
 
 	config.AddHostKey(hostkey)
 
 	listener, err := net.Listen("tcp", viper.GetString("SSH-LISTEN"))
-	log.Printf("SSH listning on %s", listener.Addr().String())
+
+	log.Printf("SSH: listening on %s", listener.Addr().String())
 	if err != nil {
 		log.Fatal("failed to listen for ssh connections: ", err)
 	}
@@ -117,7 +118,8 @@ func (s *Server) acceptSCP(c net.Conn, sshc *ssh.ServerConfig) {
 
 		channel, requests, err := newChannel.Accept()
 		if err != nil {
-			log.Fatalf("Could not accept channel: %v", err)
+			log.Printf("Could not accept channel: %v", err)
+			continue
 		}
 
 		// Sessions have out-of-band requests such as "shell",
