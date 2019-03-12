@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"path"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -49,6 +50,10 @@ func (s *Server) Listen() {
 
 func (s *Server) Sink(w http.ResponseWriter, r *http.Request) {
 	id := path.Base(r.URL.Path)
+
+	// remove .zip if pressent
+	id = strings.Replace(id, ".zip", "", 1)
+
 	sink, err := s.DB.Sink(id)
 	if err != nil {
 		// the only error available from Sink is a 404 style error

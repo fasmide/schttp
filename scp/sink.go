@@ -28,7 +28,7 @@ func NewSink(c ssh.Channel) (*Sink, error) {
 	s := &Sink{ID: id, channel: c, ScpStream: &ScpStream{Writer: c, Reader: bufio.NewReader(c)}}
 
 	// say hello to our customer
-	c.Stderr().Write([]byte(fmt.Sprintf("[scp.click] Download from %s%s\n", viper.GetString("ADVERTISE_URL"), path.Join("sink", s.ID))))
+	c.Stderr().Write([]byte(fmt.Sprintf("[scp.click] Download from %s%s.zip\n", viper.GetString("ADVERTISE_URL"), path.Join("sink", s.ID))))
 
 	return s, nil
 }
