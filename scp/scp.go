@@ -20,6 +20,7 @@ const (
 	Unsupported Type = iota
 	Create
 	Directory
+	TimeCreatedModified
 	Exit
 )
 
@@ -48,7 +49,16 @@ func (c *Command) Parse(raw []byte) error {
 	if raw[0] == 'E' {
 		c.Type = Exit
 		c.Name = ""
-		c.Mode = os.FileMode(0)
+		c.Mode = 0
+		c.Length = 0
+		return nil
+	}
+	if raw[0] == 'T' {
+		// we dont fully support T
+		// but we also dont need it, its about access and modified time
+		c.Type = TimeCreatedModified
+		c.Name = ""
+		c.Mode = 0
 		c.Length = 0
 		return nil
 	}
