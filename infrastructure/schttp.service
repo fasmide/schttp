@@ -1,0 +1,10 @@
+[Unit]
+Description=schttp
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/root/schttp
+
+[Install]
+WantedBy=multi-user.target

@@ -62,7 +62,6 @@ func (s *Server) Sink(w http.ResponseWriter, r *http.Request) {
 		log.Printf("HTTP: failed to sink data to %s: %s", r.RemoteAddr, err)
 	}
 
-	log.Printf("HTTP: wrote %d bytes to %s", n, r.RemoteAddr)
 }
 
 func (s *Server) Source(w http.ResponseWriter, r *http.Request) {
