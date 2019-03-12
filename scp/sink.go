@@ -55,6 +55,7 @@ func (s *Sink) WriteTo(w io.Writer) (int64, error) {
 	err = z.Close()
 	if err != nil {
 		log.Printf("Sink error: could not close zip file: %s", err)
+
 		// indicate to the remote scp client we have failed
 		_, _ = s.channel.SendRequest("exit-status", false, ssh.Marshal(&ExitStatus{Status: 1}))
 

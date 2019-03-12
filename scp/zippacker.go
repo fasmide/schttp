@@ -38,11 +38,19 @@ func (z *ZipPacker) File(name string, mode os.FileMode, r io.Reader) error {
 
 func (z *ZipPacker) Enter(name string, mode os.FileMode) error {
 	z.Path = path.Join(z.Path, name)
+	z.Path = path.Clean(z.Path)
 	return nil
 }
 
 func (z *ZipPacker) Exit() error {
 	parts := strings.Split(z.Path, "/")
+
+	// if there was no path to split and we somehow received a directory leave
+	if len(parts) == 0 {
+		z.Path = "."
+		return nil
+	}
+
 	z.Path = path.Join(parts[0 : len(parts)-1]...)
 	return nil
 }
