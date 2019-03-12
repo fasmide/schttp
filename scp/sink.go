@@ -7,26 +7,30 @@ import (
 	"log"
 	"path"
 
-	"github.com/rs/xid"
 	"github.com/spf13/viper"
+	"github.com/teris-io/shortid"
 	"golang.org/x/crypto/ssh"
 )
 
 type Sink struct {
 	*ScpStream
-	ID      xid.ID
+	ID      string
 	channel ssh.Channel
 }
 
 // NewSink returns a new initialized *Sink and prints a welcome message
-func NewSink(c ssh.Channel) *Sink {
+func NewSink(c ssh.Channel) (*Sink, error) {
 
-	s := &Sink{ID: xid.New(), channel: c, ScpStream: &ScpStream{Writer: c, Reader: bufio.NewReader(c)}}
+	id, err := shortid.Generate()
+	if err != nil {
+		return nil, err
+	}
+	s := &Sink{ID: id, channel: c, ScpStream: &ScpStream{Writer: c, Reader: bufio.NewReader(c)}}
 
 	// say hello to our customer
-	c.Stderr().Write([]byte(fmt.Sprintf("[scp.click] Download from %s%s\n", viper.GetString("ADVERTISE-URL"), path.Join("sink", s.ID.String()))))
+	c.Stderr().Write([]byte(fmt.Sprintf("[scp.click] Download from %s%s\n", viper.GetString("ADVERTISE-URL"), path.Join("sink", s.ID))))
 
-	return s
+	return s, nil
 }
 
 // WriteTo implements the default golang WriterTo interface

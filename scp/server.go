@@ -147,11 +147,20 @@ func (s *Server) acceptSCP(c net.Conn, sshc *ssh.ServerConfig) {
 
 				// sink (accept files)
 				if strings.Index(payload, "-t") >= 0 {
-					sink := NewSink(channel)
-					log.Printf("Sink from %s, with id %s", c.RemoteAddr().String(), sink.ID.String())
+					sink, err := NewSink(channel)
+					if err != nil {
+						log.Printf("could not create new sink: %s", err)
+
+						// tell remote to go away
+						req.Reply(false, nil)
+						channel.Close()
+						continue
+					}
+
+					log.Printf("Sink from %s, with id %s", c.RemoteAddr().String(), sink.ID)
 
 					s.Lock()
-					s.sinks[sink.ID.String()] = sink
+					s.sinks[sink.ID] = sink
 					s.Unlock()
 
 					req.Reply(true, nil)
@@ -160,11 +169,20 @@ func (s *Server) acceptSCP(c net.Conn, sshc *ssh.ServerConfig) {
 
 				// source (send files)
 				if strings.Index(payload, "-f") >= 0 {
-					source := NewSource(channel)
-					log.Printf("Source from %s, with id %s", c.RemoteAddr().String(), source.ID.String())
+					source, err := NewSource(channel)
+					if err != nil {
+						log.Printf("could not create new source: %s", err)
+
+						// tell remote to go away
+						req.Reply(false, nil)
+						channel.Close()
+						continue
+					}
+
+					log.Printf("Source from %s, with id %s", c.RemoteAddr().String(), source.ID)
 
 					s.Lock()
-					s.sources[source.ID.String()] = source
+					s.sources[source.ID] = source
 					s.Unlock()
 
 					req.Reply(true, nil)

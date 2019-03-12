@@ -3,17 +3,23 @@ package scp
 import (
 	"io"
 
-	"github.com/rs/xid"
+	"github.com/teris-io/shortid"
+
 	"golang.org/x/crypto/ssh"
 )
 
 type Source struct {
-	ID      xid.ID
+	ID      string
 	channel ssh.Channel
 }
 
-func NewSource(c ssh.Channel) *Source {
-	return &Source{ID: xid.New(), channel: c}
+func NewSource(c ssh.Channel) (*Source, error) {
+	id, err := shortid.Generate()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Source{ID: id, channel: c}, nil
 }
 
 func (s *Source) ReadFrom(r io.Reader) (int64, error) {
