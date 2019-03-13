@@ -13,6 +13,33 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+const Banner = `
+     ___  ___ _ __  
+    / __|/ __| '_ \ 
+    \__ \ (__| |_) |
+    |___/\___| .__/ 
+            | |    
+            |_|    
+             _ _      _    
+            | (_)    | |   
+         ___| |_  ___| | __
+        / __| | |/ __| |/ /
+       | (__| | | (__|   < 
+        \___|_|_|\___|_|\_\
+        (click, not dick)
+						
+    Hello %s, you have reached scp.click.
+    
+    This service will enable you to transfer files between
+    boxes using standard tools such as scp, curl and unzip.
+
+    Usage:
+        scp -r someDirectory/ scp.click:
+
+    You will then be presented with a one time URL.
+
+`
+
 func init() {
 	viper.SetDefault("SSH_LISTEN", "0.0.0.0:2222")
 }
@@ -26,6 +53,10 @@ type Server struct {
 
 func NewServer() *Server {
 	return &Server{sinks: make(map[string]*Sink), sources: make(map[string]*Source)}
+}
+
+func (s *Server) Banner(meta ssh.ConnMetadata) string {
+	return fmt.Sprintf(Banner, meta.RemoteAddr().String())
 }
 
 func (s *Server) Sink(id string) (io.WriterTo, error) {
@@ -72,7 +103,8 @@ func (s *Server) Listen() {
 		PublicKeyCallback: func(c ssh.ConnMetadata, pubKey ssh.PublicKey) (*ssh.Permissions, error) {
 			return nil, nil
 		},
-		ServerVersion: "SSH-2.0-scp.click",
+		ServerVersion:  "SSH-2.0-scp.click",
+		BannerCallback: s.Banner,
 	}
 
 	config.AddHostKey(hostkey)
