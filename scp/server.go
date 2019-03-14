@@ -32,13 +32,13 @@ const Banner = `
     
     This service will enable you to transfer files between
     boxes using standard tools such as scp, curl and unzip.
+	
+    Read more at https://github.com/fasmide/schttp
 
-    Usage:
+	Usage:
         scp -r someDirectory/ scp.click:
 
     You will then be presented with a one time URL.
-
-    Read more at https://github.com/fasmide/schttp
 
 `
 
