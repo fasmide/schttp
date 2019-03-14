@@ -1,4 +1,4 @@
-package scp
+package packer
 
 import (
 	"archive/tar"
@@ -11,22 +11,25 @@ import (
 	"time"
 )
 
-type TarPacker struct {
+type TarGz struct {
 	*gzip.Writer
 	tar  *tar.Writer
 	Path string
 }
 
-func NewTarPacker(w io.Writer) *TarPacker {
+func NewTarGz(w io.Writer) *TarGz {
 	gzip := gzip.NewWriter(w)
-	return &TarPacker{tar: tar.NewWriter(gzip)}
+	return &TarGz{tar: tar.NewWriter(gzip), Writer: gzip}
 }
 
-func (z *TarPacker) File(name string, mode os.FileMode, r io.Reader) error {
+func (z *TarGz) File(name string, mode os.FileMode, size int64, r io.Reader) error {
 	err := z.tar.WriteHeader(&tar.Header{
-		Name:    path.Join(z.Path, name),
-		ModTime: time.Now(),
+		Name: path.Join(z.Path, name),
+
+		// We remove 5 seconds as the tar "file is in the future" is highly annoying
+		ModTime: time.Now().Add(time.Second * -5),
 		Mode:    int64(mode),
+		Size:    size,
 	})
 	if err != nil {
 		return fmt.Errorf("unable to create file: %s", err)
@@ -40,13 +43,13 @@ func (z *TarPacker) File(name string, mode os.FileMode, r io.Reader) error {
 	return nil
 }
 
-func (z *TarPacker) Enter(name string, mode os.FileMode) error {
+func (z *TarGz) Enter(name string, mode os.FileMode) error {
 	z.Path = path.Join(z.Path, name)
 	z.Path = path.Clean(z.Path)
 	return nil
 }
 
-func (z *TarPacker) Exit() error {
+func (z *TarGz) Exit() error {
 	parts := strings.Split(z.Path, "/")
 
 	// if there was no path to split and we somehow received a directory leave
@@ -59,7 +62,7 @@ func (z *TarPacker) Exit() error {
 	return nil
 }
 
-func (z *TarPacker) Close() error {
+func (z *TarGz) Close() error {
 	err := z.tar.Close()
 	if err != nil {
 		// ninja also close the gzip
@@ -68,7 +71,7 @@ func (z *TarPacker) Close() error {
 		return fmt.Errorf("could not close tar: %s", err)
 	}
 
-	// also close gzip
+	// also Flush and close gzip
 	err = z.Writer.Close()
 	if err != nil {
 		return fmt.Errorf("could not close gzip: %s", err)

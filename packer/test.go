@@ -1,4 +1,4 @@
-package scp
+package packer
 
 import (
 	"io"
@@ -7,10 +7,10 @@ import (
 	"os"
 )
 
-type TestPacker struct {
+type Test struct {
 }
 
-func (t *TestPacker) File(name string, mode os.FileMode, r io.Reader) error {
+func (t *Test) File(name string, mode os.FileMode, r io.Reader) error {
 	d, err := ioutil.ReadAll(r)
 	if err != nil {
 		log.Fatalf("TestError: %s", err)
@@ -20,12 +20,12 @@ func (t *TestPacker) File(name string, mode os.FileMode, r io.Reader) error {
 	return nil
 }
 
-func (t *TestPacker) Enter(name string, mode os.FileMode) error {
+func (t *Test) Enter(name string, mode os.FileMode) error {
 	log.Printf("Test: Creating directory %s with mode %s", name, mode)
 	return nil
 }
 
-func (t *TestPacker) Exit() error {
+func (t *Test) Exit() error {
 	log.Printf("Test: Leaving")
 	return nil
 }

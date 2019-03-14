@@ -1,4 +1,4 @@
-package scp
+package packer
 
 import (
 	"archive/zip"
@@ -10,16 +10,16 @@ import (
 	"time"
 )
 
-type ZipPacker struct {
+type Zip struct {
 	*zip.Writer
 	Path string
 }
 
-func NewZipPacker(w io.Writer) *ZipPacker {
-	return &ZipPacker{Writer: zip.NewWriter(w)}
+func NewZip(w io.Writer) *Zip {
+	return &Zip{Writer: zip.NewWriter(w)}
 }
 
-func (z *ZipPacker) File(name string, mode os.FileMode, r io.Reader) error {
+func (z *Zip) File(name string, mode os.FileMode, _ int64, r io.Reader) error {
 	fd, err := z.CreateHeader(&zip.FileHeader{
 		Name:     path.Join(z.Path, name),
 		Modified: time.Now(),
@@ -36,13 +36,13 @@ func (z *ZipPacker) File(name string, mode os.FileMode, r io.Reader) error {
 	return nil
 }
 
-func (z *ZipPacker) Enter(name string, mode os.FileMode) error {
+func (z *Zip) Enter(name string, mode os.FileMode) error {
 	z.Path = path.Join(z.Path, name)
 	z.Path = path.Clean(z.Path)
 	return nil
 }
 
-func (z *ZipPacker) Exit() error {
+func (z *Zip) Exit() error {
 	parts := strings.Split(z.Path, "/")
 
 	// if there was no path to split and we somehow received a directory leave

@@ -7,6 +7,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/fasmide/schttp/packer"
 )
 
 type ScpStream struct {
@@ -29,12 +31,6 @@ type Command struct {
 	Mode   os.FileMode
 	Length int64
 	Type   Type
-}
-
-type Packer interface {
-	File(string, os.FileMode, io.Reader) error
-	Enter(string, os.FileMode) error
-	Exit() error
 }
 
 func (c *Command) Parse(raw []byte) error {
@@ -90,7 +86,7 @@ func (c *Command) Parse(raw []byte) error {
 }
 
 // Pack reads files from an scp client and packs them with a given Packer
-func (s *ScpStream) Pack(p Packer) error {
+func (s *ScpStream) Pack(p packer.Packer) error {
 	// until something returns...
 	for {
 
@@ -127,7 +123,7 @@ func (s *ScpStream) Pack(p Packer) error {
 			}
 
 			// Pack the file
-			err = p.File(c.Name, c.Mode, io.LimitReader(s, c.Length))
+			err = p.File(c.Name, c.Mode, c.Length, io.LimitReader(s, c.Length))
 
 			if err != nil {
 				return fmt.Errorf("unable to pack: %s", err)

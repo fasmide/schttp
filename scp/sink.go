@@ -7,6 +7,7 @@ import (
 	"log"
 	"path"
 
+	"github.com/fasmide/schttp/packer"
 	"github.com/spf13/viper"
 	"github.com/teris-io/shortid"
 	"golang.org/x/crypto/ssh"
@@ -18,6 +19,19 @@ type Sink struct {
 	channel ssh.Channel
 }
 
+// SinkBanner is printed out when ready to stream files
+const SinkBanner = `    -----------------------
+
+    One time urls for download
+      %s.zip 
+    or
+      %s.tar.gz
+
+    Or unpack directly on another box:
+      curl %s.tar.gz | tar xvz
+    (May overwrite existing files)
+`
+
 // NewSink returns a new initialized *Sink and prints a welcome message
 func NewSink(c ssh.Channel) (*Sink, error) {
 
@@ -28,17 +42,16 @@ func NewSink(c ssh.Channel) (*Sink, error) {
 	s := &Sink{ID: id, channel: c, ScpStream: &ScpStream{Writer: c, Reader: bufio.NewReader(c)}}
 
 	// say hello to our customer
-	c.Stderr().Write([]byte(fmt.Sprintf("[scp.click] Download from %s%s.zip\n", viper.GetString("ADVERTISE_URL"), path.Join("sink", s.ID))))
+	url := fmt.Sprintf("%s%s", viper.GetString("ADVERTISE_URL"), path.Join("sink", s.ID))
+	fmt.Fprintf(c.Stderr(), SinkBanner, url, url, url)
 
 	return s, nil
 }
 
-// WriteTo implements the default golang WriterTo interface
-// It will read the files from the remote client and pack them up in zip format
-func (s *Sink) WriteTo(w io.Writer) (int64, error) {
-	z := NewZipPacker(w)
+// PackTo accepts a PackerCloser and adds files from the transfer to it
+func (s *Sink) PackTo(p packer.PackerCloser) error {
 
-	err := s.Pack(z)
+	err := s.Pack(p)
 	if err != nil && err != io.EOF {
 		log.Printf("Sink error: %s", err)
 
@@ -47,12 +60,12 @@ func (s *Sink) WriteTo(w io.Writer) (int64, error) {
 
 		// close stuff
 		_ = s.channel.Close()
-		_ = z.Close()
-		return 0, err
+		_ = p.Close()
+		return err
 
 	}
 
-	err = z.Close()
+	err = p.Close()
 	if err != nil {
 		log.Printf("Sink error: could not close zip file: %s", err)
 
@@ -61,7 +74,8 @@ func (s *Sink) WriteTo(w io.Writer) (int64, error) {
 
 		// close stuff
 		_ = s.channel.Close()
-		_ = z.Close()
+		_ = p.Close()
+		return err
 	}
 
 	// indicate to remote scp client we have succeded
@@ -69,5 +83,5 @@ func (s *Sink) WriteTo(w io.Writer) (int64, error) {
 	_ = s.channel.Close()
 
 	// its really not true zero bytes where written
-	return 0, nil
+	return nil
 }

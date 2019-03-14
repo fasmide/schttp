@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/fasmide/schttp/packer"
 	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh"
 )
@@ -61,7 +62,7 @@ func (s *Server) Banner(meta ssh.ConnMetadata) string {
 	return fmt.Sprintf(Banner, meta.RemoteAddr().String())
 }
 
-func (s *Server) Sink(id string) (io.WriterTo, error) {
+func (s *Server) Sink(id string) (packer.PackerTo, error) {
 	s.Lock()
 	defer s.Unlock()
 
