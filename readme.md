@@ -1,4 +1,8 @@
-# possible domains:
-scp.sexy
-scp.save
-scp.plumbing
+# schttp
+
+This repo holds the source of scp.click
+
+Try it out:
+```
+scp -r someDirectory scp.click:
+```
