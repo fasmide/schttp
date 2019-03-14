@@ -108,6 +108,14 @@ func (s *Server) Listen() {
 		},
 		ServerVersion:  "SSH-2.0-scp.click",
 		BannerCallback: s.Banner,
+		Config: ssh.Config{
+			// Add in the default preferred ciphers minus chacha20 Poly
+			// as we would like AES-NI acceleration
+			Ciphers: []string{
+				"aes128-gcm@openssh.com",
+				"aes128-ctr", "aes192-ctr", "aes256-ctr",
+			},
+		},
 	}
 
 	config.AddHostKey(hostkey)
