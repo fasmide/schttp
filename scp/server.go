@@ -35,7 +35,7 @@ const Banner = `
 	
     Read more at https://github.com/fasmide/schttp
 
-	Usage:
+    Usage:
         scp -r someDirectory/ scp.click:
 
     You will then be presented with a one time URL.
