@@ -38,6 +38,8 @@ const Banner = `
 
     You will then be presented with a one time URL.
 
+    Read more at https://github.com/fasmide/schttp
+
 `
 
 func init() {
