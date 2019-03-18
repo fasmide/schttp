@@ -14,13 +14,12 @@ import (
 )
 
 func init() {
-	viper.SetDefault("HTTP_LISTEN", "0.0.0.0:8080")
 	viper.SetDefault("ADVERTISE_URL", "http://localhost:8080/")
-
 }
 
 type Server struct {
 	http.ServeMux
+	http.Server
 
 	// We will be looking up sinks and sources from the database
 	// of connected sinks and sources
@@ -34,20 +33,16 @@ type DB interface {
 	Source(string) (io.ReaderFrom, error)
 }
 
-func (s *Server) Listen() {
+func (s *Server) Listen(l net.Listener) {
 	// setup routes
 	s.HandleFunc("/sink/", s.Sink)
 	s.HandleFunc("/source/", s.Source)
 
-	// Setup listener
-	l, err := net.Listen("tcp", viper.GetString("HTTP_LISTEN"))
-	if err != nil {
-		log.Fatalf("HTTP: unable to listen on %s: %s", l.Addr().String(), err)
-	}
-	log.Printf("HTTP: listening on %s", l.Addr().String())
+	// the handler is embedded in s
+	s.Server.Handler = s
 
 	// Listen for http
-	http.Serve(l, s)
+	s.Serve(l)
 }
 
 func (s *Server) Sink(w http.ResponseWriter, r *http.Request) {

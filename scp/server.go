@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/fasmide/schttp/packer"
-	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -43,15 +42,24 @@ const Banner = `
 
 `
 
-func init() {
-	viper.SetDefault("SSH_LISTEN", "0.0.0.0:2222")
-}
-
 type Server struct {
-	sync.Mutex
+	sync.RWMutex
 
 	sinks   map[string]*Sink
 	sources map[string]*Source
+
+	listener net.Listener
+
+	// this bool indicates if we have been shutdown
+	// - when shutdown the server should not accept any
+	//   more sinks or sources
+	// - its kind of hacky but it allows us to turn down clients which was just accepted
+	//   but say - was slow receiving the ssh banner - without having to track every single
+	//   net.Conn and their state (are they currently tranfering data?) - and disconnect
+	//   only those which are not
+	// - once a transfer have started - its up to the http server to end the session
+	shutdown        bool
+	shutdownMessage string
 }
 
 func NewServer() *Server {
@@ -84,8 +92,37 @@ func (s *Server) Source(id string) (io.ReaderFrom, error) {
 	return nil, fmt.Errorf("%s does not exist", id)
 }
 
+// Shutdown sends a message to all client with transfers that have yet to start
+// and disconnects them
+func (s *Server) Shutdown(msg string) {
+
+	// we should not accept any more connections
+	s.listener.Close()
+
+	s.Lock()
+
+	// set shutdown bit + message
+	s.shutdown = true
+	s.shutdownMessage = msg
+
+	for k, v := range s.sinks {
+		// its kind of hacky to address a field of sink directly
+		fmt.Fprint(v.channel.Stderr(), msg)
+		v.channel.SendRequest("exit-status", false, ssh.Marshal(&ExitStatus{Status: 1}))
+		v.channel.Close()
+		delete(s.sinks, k)
+	}
+
+	// TODO: Do the same thing for sources at some point
+
+	s.Unlock()
+}
+
 // Listen listens for new ssh connections
-func (s *Server) Listen() {
+func (s *Server) Listen(listener net.Listener) {
+
+	// set our own listener - this is primarly used for closing
+	s.listener = listener
 
 	privateBytes, err := ioutil.ReadFile("id_rsa")
 	if err != nil {
@@ -120,18 +157,12 @@ func (s *Server) Listen() {
 
 	config.AddHostKey(hostkey)
 
-	listener, err := net.Listen("tcp", viper.GetString("SSH_LISTEN"))
-
-	log.Printf("SSH: listening on %s", listener.Addr().String())
-	if err != nil {
-		log.Fatal("failed to listen for ssh connections: ", err)
-	}
-
 	for {
 		nConn, err := listener.Accept()
 		if err != nil {
-			log.Fatal("unable to accept incoming ssh connection: ", err)
-			continue
+			// this could be normal - ie when doing upgrades
+			log.Printf("unable to accept incoming ssh connection: %s", err)
+			break
 		}
 		go s.acceptSCP(nConn, config)
 	}
@@ -170,6 +201,17 @@ func (s *Server) acceptSCP(c net.Conn, sshc *ssh.ServerConfig) {
 		// "shell" request.
 		go func(in <-chan *ssh.Request) {
 			for req := range in {
+				// turn everything down if we have been shutdown while
+				// this connection was accepted
+				s.RLock()
+				if s.shutdown {
+					s.RUnlock()
+					fmt.Fprint(channel.Stderr(), s.shutdownMessage)
+					req.Reply(false, nil)
+					continue
+				}
+				s.RUnlock()
+
 				// exec with payload scp -t || -f is allowed
 				if req.Type != "exec" {
 					req.Reply(false, nil)
@@ -187,7 +229,7 @@ func (s *Server) acceptSCP(c net.Conn, sshc *ssh.ServerConfig) {
 
 				// if the user specified "-p" tell him it wont do anything
 				if strings.Index(payload, "-p") >= 0 {
-					fmt.Fprint(channel.Stderr(), "[scp.click] You seem to have specified -p (preserve create and modified time) - this is ignored\n")
+					fmt.Fprint(channel.Stderr(), "    You seem to have specified -p (preserve create and modified time) - this is ignored\n")
 				}
 
 				// sink (accept files)
@@ -198,7 +240,6 @@ func (s *Server) acceptSCP(c net.Conn, sshc *ssh.ServerConfig) {
 
 						// tell remote to go away
 						req.Reply(false, nil)
-						channel.Close()
 						continue
 					}
 
