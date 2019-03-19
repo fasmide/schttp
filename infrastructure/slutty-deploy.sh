@@ -4,7 +4,7 @@ go build ../
 
 # as go does magic things to executables - we cannot overwrite the file while
 # it is running - but we can move it out of the way (which will properly save us one day anyway)
-ssh -p2222 root@scp.click "mv /root/schttp $(mktemp schttp-update-XXXXX)"
+ssh -p2222 root@scp.click 'mv /root/schttp $(mktemp schttp-update-XXXXX)'
 
 # Move the new executable
 scp -P2222 schttp root@scp.click:schttp
