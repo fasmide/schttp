@@ -48,7 +48,8 @@ type Server struct {
 	sinks   map[string]*Sink
 	sources map[string]*Source
 
-	listener net.Listener
+	listener  net.Listener
+	sshConfig *ssh.ServerConfig
 
 	// this bool indicates if we have been shutdown
 	// - when shutdown the server should not accept any
@@ -63,10 +64,50 @@ type Server struct {
 }
 
 func NewServer() *Server {
-	return &Server{sinks: make(map[string]*Sink), sources: make(map[string]*Source)}
+	// ssh.ServerConfig
+	// - Anyone can login with any combination of user and password
+	// - Any public key is accepted
+	config := &ssh.ServerConfig{
+		PasswordCallback: func(c ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) {
+			return nil, nil
+		},
+
+		PublicKeyCallback: func(c ssh.ConnMetadata, pubKey ssh.PublicKey) (*ssh.Permissions, error) {
+			return nil, nil
+		},
+		ServerVersion:  "SSH-2.0-schttp",
+		BannerCallback: SSHBanner,
+		Config: ssh.Config{
+			// Add in the default preferred ciphers minus chacha20 Poly
+			// as we would like AES-NI acceleration
+			Ciphers: []string{
+				"aes128-gcm@openssh.com",
+				"aes128-ctr", "aes192-ctr", "aes256-ctr",
+			},
+		},
+	}
+
+	// Read private key
+	privateBytes, err := ioutil.ReadFile("id_rsa")
+	if err != nil {
+		log.Fatal("Failed to load private key: ", err)
+	}
+
+	hostkey, err := ssh.ParsePrivateKey(privateBytes)
+	if err != nil {
+		log.Fatal("Failed to parse private key: ", err)
+	}
+
+	config.AddHostKey(hostkey)
+
+	return &Server{
+		sinks:     make(map[string]*Sink),
+		sources:   make(map[string]*Source),
+		sshConfig: config,
+	}
 }
 
-func (s *Server) Banner(meta ssh.ConnMetadata) string {
+func SSHBanner(meta ssh.ConnMetadata) string {
 	return fmt.Sprintf(Banner, meta.RemoteAddr().String())
 }
 
@@ -119,42 +160,9 @@ func (s *Server) Shutdown(msg string) {
 
 // Listen listens for new ssh connections
 func (s *Server) Listen(listener net.Listener) {
-
-	// set our own listener - this is primarly used for closing
+	// set our own listener - this listener is closed later when
+	// or if the server is shutdown
 	s.listener = listener
-
-	privateBytes, err := ioutil.ReadFile("id_rsa")
-	if err != nil {
-		log.Fatal("Failed to load private key: ", err)
-	}
-
-	hostkey, err := ssh.ParsePrivateKey(privateBytes)
-	if err != nil {
-		log.Fatal("Failed to parse private key: ", err)
-	}
-
-	// anyone can login with any combination of user / password
-	config := &ssh.ServerConfig{
-		PasswordCallback: func(c ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) {
-			return nil, nil
-		},
-
-		PublicKeyCallback: func(c ssh.ConnMetadata, pubKey ssh.PublicKey) (*ssh.Permissions, error) {
-			return nil, nil
-		},
-		ServerVersion:  "SSH-2.0-scp.click",
-		BannerCallback: s.Banner,
-		Config: ssh.Config{
-			// Add in the default preferred ciphers minus chacha20 Poly
-			// as we would like AES-NI acceleration
-			Ciphers: []string{
-				"aes128-gcm@openssh.com",
-				"aes128-ctr", "aes192-ctr", "aes256-ctr",
-			},
-		},
-	}
-
-	config.AddHostKey(hostkey)
 
 	for {
 		nConn, err := listener.Accept()
@@ -163,12 +171,12 @@ func (s *Server) Listen(listener net.Listener) {
 			log.Printf("unable to accept incoming ssh connection: %s", err)
 			break
 		}
-		go s.acceptSCP(nConn, config)
+		go s.acceptSCP(nConn)
 	}
 }
 
-func (s *Server) acceptSCP(c net.Conn, sshc *ssh.ServerConfig) {
-	_, chans, reqs, err := ssh.NewServerConn(c, sshc)
+func (s *Server) acceptSCP(c net.Conn) {
+	_, chans, reqs, err := ssh.NewServerConn(c, s.sshConfig)
 
 	if err != nil {
 		log.Printf("unable to accept ssh from %s: %s", c.RemoteAddr().String(), err)
