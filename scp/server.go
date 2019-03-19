@@ -43,7 +43,7 @@ const Banner = `
 `
 
 type Server struct {
-	sync.RWMutex
+	sync.Mutex
 
 	sinks   map[string]*Sink
 	sources map[string]*Source
@@ -201,17 +201,6 @@ func (s *Server) acceptSCP(c net.Conn, sshc *ssh.ServerConfig) {
 		// "shell" request.
 		go func(in <-chan *ssh.Request) {
 			for req := range in {
-				// turn everything down if we have been shutdown while
-				// this connection was accepted
-				s.RLock()
-				if s.shutdown {
-					s.RUnlock()
-					fmt.Fprint(channel.Stderr(), s.shutdownMessage)
-					req.Reply(false, nil)
-					continue
-				}
-				s.RUnlock()
-
 				// exec with payload scp -t || -f is allowed
 				if req.Type != "exec" {
 					req.Reply(false, nil)
@@ -246,6 +235,13 @@ func (s *Server) acceptSCP(c net.Conn, sshc *ssh.ServerConfig) {
 					log.Printf("Sink from %s, with id %s", c.RemoteAddr().String(), sink.ID)
 
 					s.Lock()
+					// turn down request if we have been shutdown
+					if s.shutdown {
+						s.Unlock()
+						fmt.Fprint(channel.Stderr(), s.shutdownMessage)
+						req.Reply(false, nil)
+						continue
+					}
 					s.sinks[sink.ID] = sink
 					s.Unlock()
 
