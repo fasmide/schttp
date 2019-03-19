@@ -92,10 +92,9 @@ func (s *Server) Source(id string) (io.ReaderFrom, error) {
 	return nil, fmt.Errorf("%s does not exist", id)
 }
 
-// Shutdown sends a message to all client with transfers that have yet to start
+// Shutdown sends a message to all clients with transfers that have yet to start
 // and disconnects them
 func (s *Server) Shutdown(msg string) {
-
 	// we should not accept any more connections
 	s.listener.Close()
 
