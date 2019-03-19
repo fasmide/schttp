@@ -51,7 +51,7 @@ func (s *Server) Sink(w http.ResponseWriter, r *http.Request) {
 
 	// ensure there was an file extension given
 	if len(fileParts) != 2 {
-		http.Error(w, "[scp.click] Please add file extension, e.g. .zip or .tar.gz", http.StatusBadRequest)
+		http.Error(w, "please add file extension, e.g. .zip or .tar.gz", http.StatusBadRequest)
 		return
 	}
 
@@ -72,7 +72,7 @@ func (s *Server) Sink(w http.ResponseWriter, r *http.Request) {
 	if p == nil {
 		http.Error(
 			w,
-			fmt.Sprintf("[scp.click] i cannot do \"%s\" files - please add .zip or .tar.gz only", extension),
+			fmt.Sprintf("i cannot do \"%s\" files - please add .zip or .tar.gz only", extension),
 			http.StatusBadRequest,
 		)
 
