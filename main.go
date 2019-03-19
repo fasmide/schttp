@@ -20,6 +20,9 @@ func init() {
 	viper.SetDefault("HTTP_LISTEN", "0.0.0.0:8080")
 	viper.SetDefault("SSH_LISTEN", "0.0.0.0:2222")
 	viper.SetDefault("PID_FILE", "/var/run/schttp.pid")
+
+	// this bool indicates if run by systemd (or other init)
+	viper.SetDefault("SYSTEMD", false)
 }
 
 // main purpose is to set listeners up, handle process replacement (upgrades) and shut things down nicely
@@ -27,7 +30,7 @@ func main() {
 	viper.AutomaticEnv()
 
 	// detect if we are being run by systemd (or whatever)
-	if os.Getppid() == 1 {
+	if viper.GetBool("SYSTEMD") {
 		// in systemd - remove the timestamps as journald adds this it self
 		// - without the timestamp its also possible for journald to detect identical messages
 		// - the following magic was found on stackoverflow :)
