@@ -4,11 +4,15 @@ After=network.target
 
 [Service]
 ExecStart=/root/schttp
+ExecReload=/bin/kill -HUP $MAINPID
+
+PIDFile=/var/run/schttp.pid
 WorkingDirectory=/root
 
 Environment=ADVERTISE_URL=http://scp.click/
 Environment=HTTP_LISTEN=0.0.0.0:80
 Environment=SSH_LISTEN=0.0.0.0:22
+Environment=SYSTEMD=true
 
 [Install]
 WantedBy=multi-user.target

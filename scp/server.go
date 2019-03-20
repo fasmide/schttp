@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/fasmide/schttp/packer"
-	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -43,22 +42,72 @@ const Banner = `
 
 `
 
-func init() {
-	viper.SetDefault("SSH_LISTEN", "0.0.0.0:2222")
-}
-
 type Server struct {
 	sync.Mutex
 
 	sinks   map[string]*Sink
 	sources map[string]*Source
+
+	listener  net.Listener
+	sshConfig *ssh.ServerConfig
+
+	// this bool indicates if we have been shutdown
+	// - when shutdown the server should not accept any
+	//   more sinks or sources
+	// - its kind of hacky but it allows us to turn down clients which was just accepted
+	//   but say - was slow receiving the ssh banner - without having to track every single
+	//   net.Conn and their state (are they currently tranfering data?) - and disconnect
+	//   only those which are not
+	// - once a transfer have started - its up to the http server to end the session
+	shutdown        bool
+	shutdownMessage string
 }
 
 func NewServer() *Server {
-	return &Server{sinks: make(map[string]*Sink), sources: make(map[string]*Source)}
+	// ssh.ServerConfig
+	// - Anyone can login with any combination of user and password
+	// - Any public key is accepted
+	config := &ssh.ServerConfig{
+		PasswordCallback: func(c ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) {
+			return nil, nil
+		},
+
+		PublicKeyCallback: func(c ssh.ConnMetadata, pubKey ssh.PublicKey) (*ssh.Permissions, error) {
+			return nil, nil
+		},
+		ServerVersion:  "SSH-2.0-schttp",
+		BannerCallback: SSHBanner,
+		Config: ssh.Config{
+			// Add in the default preferred ciphers minus chacha20 Poly
+			// as we would like AES-NI acceleration
+			Ciphers: []string{
+				"aes128-gcm@openssh.com",
+				"aes128-ctr", "aes192-ctr", "aes256-ctr",
+			},
+		},
+	}
+
+	// Read private key
+	privateBytes, err := ioutil.ReadFile("id_rsa")
+	if err != nil {
+		log.Fatal("Failed to load private key: ", err)
+	}
+
+	hostkey, err := ssh.ParsePrivateKey(privateBytes)
+	if err != nil {
+		log.Fatal("Failed to parse private key: ", err)
+	}
+
+	config.AddHostKey(hostkey)
+
+	return &Server{
+		sinks:     make(map[string]*Sink),
+		sources:   make(map[string]*Source),
+		sshConfig: config,
+	}
 }
 
-func (s *Server) Banner(meta ssh.ConnMetadata) string {
+func SSHBanner(meta ssh.ConnMetadata) string {
 	return fmt.Sprintf(Banner, meta.RemoteAddr().String())
 }
 
@@ -84,61 +133,50 @@ func (s *Server) Source(id string) (io.ReaderFrom, error) {
 	return nil, fmt.Errorf("%s does not exist", id)
 }
 
+// Shutdown sends a message to all clients with transfers that have yet to start
+// and disconnects them
+func (s *Server) Shutdown(msg string) {
+	// we should not accept any more connections
+	s.listener.Close()
+
+	s.Lock()
+
+	// set shutdown bit + message
+	s.shutdown = true
+	s.shutdownMessage = msg
+
+	for k, v := range s.sinks {
+		// its kind of hacky to address a field of sink directly
+		fmt.Fprint(v.channel.Stderr(), msg)
+		v.channel.SendRequest("exit-status", false, ssh.Marshal(&ExitStatus{Status: 1}))
+		v.channel.Close()
+		delete(s.sinks, k)
+	}
+
+	// TODO: Do the same thing for sources at some point
+
+	s.Unlock()
+}
+
 // Listen listens for new ssh connections
-func (s *Server) Listen() {
-
-	privateBytes, err := ioutil.ReadFile("id_rsa")
-	if err != nil {
-		log.Fatal("Failed to load private key: ", err)
-	}
-
-	hostkey, err := ssh.ParsePrivateKey(privateBytes)
-	if err != nil {
-		log.Fatal("Failed to parse private key: ", err)
-	}
-
-	// anyone can login with any combination of user / password
-	config := &ssh.ServerConfig{
-		PasswordCallback: func(c ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) {
-			return nil, nil
-		},
-
-		PublicKeyCallback: func(c ssh.ConnMetadata, pubKey ssh.PublicKey) (*ssh.Permissions, error) {
-			return nil, nil
-		},
-		ServerVersion:  "SSH-2.0-scp.click",
-		BannerCallback: s.Banner,
-		Config: ssh.Config{
-			// Add in the default preferred ciphers minus chacha20 Poly
-			// as we would like AES-NI acceleration
-			Ciphers: []string{
-				"aes128-gcm@openssh.com",
-				"aes128-ctr", "aes192-ctr", "aes256-ctr",
-			},
-		},
-	}
-
-	config.AddHostKey(hostkey)
-
-	listener, err := net.Listen("tcp", viper.GetString("SSH_LISTEN"))
-
-	log.Printf("SSH: listening on %s", listener.Addr().String())
-	if err != nil {
-		log.Fatal("failed to listen for ssh connections: ", err)
-	}
+func (s *Server) Listen(listener net.Listener) {
+	// set our own listener - this listener is closed later when
+	// or if the server is shutdown
+	s.listener = listener
 
 	for {
 		nConn, err := listener.Accept()
 		if err != nil {
-			log.Fatal("unable to accept incoming ssh connection: ", err)
-			continue
+			// this could be normal - ie when doing upgrades
+			log.Printf("unable to accept incoming ssh connection: %s", err)
+			break
 		}
-		go s.acceptSCP(nConn, config)
+		go s.acceptSCP(nConn)
 	}
 }
 
-func (s *Server) acceptSCP(c net.Conn, sshc *ssh.ServerConfig) {
-	_, chans, reqs, err := ssh.NewServerConn(c, sshc)
+func (s *Server) acceptSCP(c net.Conn) {
+	_, chans, reqs, err := ssh.NewServerConn(c, s.sshConfig)
 
 	if err != nil {
 		log.Printf("unable to accept ssh from %s: %s", c.RemoteAddr().String(), err)
@@ -187,7 +225,7 @@ func (s *Server) acceptSCP(c net.Conn, sshc *ssh.ServerConfig) {
 
 				// if the user specified "-p" tell him it wont do anything
 				if strings.Index(payload, "-p") >= 0 {
-					fmt.Fprint(channel.Stderr(), "[scp.click] You seem to have specified -p (preserve create and modified time) - this is ignored\n")
+					fmt.Fprint(channel.Stderr(), "    You seem to have specified -p (preserve create and modified time) - this is ignored\n")
 				}
 
 				// sink (accept files)
@@ -198,13 +236,19 @@ func (s *Server) acceptSCP(c net.Conn, sshc *ssh.ServerConfig) {
 
 						// tell remote to go away
 						req.Reply(false, nil)
-						channel.Close()
 						continue
 					}
 
 					log.Printf("Sink from %s, with id %s", c.RemoteAddr().String(), sink.ID)
 
 					s.Lock()
+					// turn down request if we have been shutdown
+					if s.shutdown {
+						s.Unlock()
+						fmt.Fprint(channel.Stderr(), s.shutdownMessage)
+						req.Reply(false, nil)
+						continue
+					}
 					s.sinks[sink.ID] = sink
 					s.Unlock()
 
