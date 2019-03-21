@@ -10,10 +10,12 @@ import (
 	"sync"
 
 	"github.com/fasmide/schttp/packer"
+	"github.com/spf13/viper"
 	"golang.org/x/crypto/ssh"
 )
 
-const Banner = `
+func getBanner() string {
+return `
      ___  ___ _ __  
     / __|/ __| '_ \ 
     \__ \ (__| |_) |
@@ -28,7 +30,7 @@ const Banner = `
         \___|_|_|\___|_|\_\
         (click, not dick)
 						
-    Hello %s, you have reached scp.click.
+    Hello %s, you have reached ` + viper.GetString("DOMAIN") + `
     
     This service will enable you to transfer files between
     boxes using standard tools such as scp, curl and unzip.
@@ -36,11 +38,11 @@ const Banner = `
     Read more at https://github.com/fasmide/schttp
 
     Usage:
-        scp -r someDirectory/ scp.click:
+        scp -r someDirectory/ ` + viper.GetString("DOMAIN") + `:
 
     You will then be presented with a one time URL.
-
 `
+}
 
 type Server struct {
 	sync.Mutex
@@ -108,7 +110,7 @@ func NewServer() *Server {
 }
 
 func SSHBanner(meta ssh.ConnMetadata) string {
-	return fmt.Sprintf(Banner, meta.RemoteAddr().String())
+	return fmt.Sprintf(getBanner(), meta.RemoteAddr().String())
 }
 
 func (s *Server) Sink(id string) (packer.PackerTo, error) {

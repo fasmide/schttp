@@ -14,7 +14,8 @@ import (
 )
 
 func init() {
-	viper.SetDefault("ADVERTISE_URL", "http://localhost:8080/")
+	viper.SetDefault("DOMAIN", "localhost")
+	viper.SetDefault("ADVERTISE_URL", "http://" + viper.GetString("DOMAIN") + ":8080/")
 }
 
 type Server struct {

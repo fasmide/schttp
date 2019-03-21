@@ -9,6 +9,7 @@ ExecReload=/bin/kill -HUP $MAINPID
 PIDFile=/var/run/schttp.pid
 WorkingDirectory=/root
 
+Environment=DOMAIN=scp.click
 Environment=ADVERTISE_URL=http://scp.click/
 Environment=HTTP_LISTEN=0.0.0.0:80
 Environment=SSH_LISTEN=0.0.0.0:22
