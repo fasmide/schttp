@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/fasmide/schttp/packer"
+	"github.com/gobuffalo/packr/v2"
 	"github.com/spf13/viper"
 )
 
@@ -24,6 +25,8 @@ type Server struct {
 	// We will be looking up sinks and sources from the database
 	// of connected sinks and sources
 	DB DB
+
+	box *packr.Box
 }
 
 // DB specifies methods to find sinks and sources
@@ -34,15 +37,32 @@ type DB interface {
 }
 
 func (s *Server) Listen(l net.Listener) {
+	// set up a new box by giving it a name and an optional (relative) path to a folder on disk:
+	s.box = packr.New("static", "../static")
+
 	// setup routes
 	s.HandleFunc("/sink/", s.Sink)
 	s.HandleFunc("/source/", s.Source)
+	s.Handle("/static/", http.FileServer(s.box))
+
+	// this is kind of a hack but im unable to make the packr.Box serve the index.html by it self
+	// this will however make any other requests receive the index.html which is properly ok
+	s.HandleFunc("/", s.Index)
 
 	// the handler is embedded in s
 	s.Server.Handler = s
 
 	// Listen for http
 	s.Serve(l)
+}
+
+func (s *Server) Index(w http.ResponseWriter, r *http.Request) {
+	b, err := s.box.Find("index.html")
+	if err != nil {
+		http.Error(w, "im somehow without an index.html file", http.StatusNotFound)
+		return
+	}
+	w.Write(b)
 }
 
 func (s *Server) Sink(w http.ResponseWriter, r *http.Request) {

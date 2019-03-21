@@ -1,5 +1,6 @@
 #!/bin/bash -e
 
+export GO111MODULE=on
 go build ../
 
 # as go does magic things to executables - we cannot overwrite the file while
