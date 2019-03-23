@@ -11,6 +11,7 @@
     <title>schttp</title>
   </head>
   <body>
+      <div id="app">
       <div class="container" style="margin-top: 15px; margin-bottom: 15px;">
           <div class="row">
               <div class="col">
@@ -18,7 +19,7 @@
                       <h1 class="display-4">scp.<span style="margin-right: -6px;">c</span>lick</h1>
                       <p class="lead">Upload files here, receive them on an other box by running:</p>
                       <hr class="my-4">
-                      <p class="text-center" style="font-family: monospace; font-size: 1.8em">scp -r scp.click:HfuHs72f .</p>
+                      <p class="text-center" style="font-family: monospace; font-size: 1.8em">{{ scpCommand }}</p>
                     </div>
                 </div>
             </div>
@@ -35,21 +36,31 @@
             <div class="row" style="padding-bottom: 15px;">
                 <div class="col">
 
-                    <button type="button" class="btn btn-primary btn-lg">Choose files</button>
-                    <button type="button" class="btn btn-danger btn-lg" disabled>Cancel</button>
-                    <button type="button" class="btn btn-success btn-lg float-right" disabled>Finish</button>
+                    <!-- So apparently you must hide the actural input type=file.. 
+                         if all you want is a single button and none of that "No files selected..." default
+                         behavior -->
+                    <!-- dafuq - its apparently not possible to have a file selector that allows both directories and files
+                         so we are rolling with two buttons - one for files and one for directories... -->
+                         <div class="btn-group" role="group">
+                             <button type="button" class="btn btn-primary btn-lg" onclick="document.getElementById('file').click();">Choose files</button>
+                             <button type="button" class="btn btn-info btn-lg" onclick="document.getElementById('directories').click();">or directories</button>
+                        </div>
+                            <input type="file" id="file" ref="fileInput" @change="appendFiles('fileInput')" style="display: none;" multiple></input>
+                            <input type="file" id="directories" ref="directoryInput" @change="appendFiles('directoryInput')" style="display: none;" multiple webkitdirectory></input>
+                        <button type="button" class="btn btn-success btn-lg float-right" disabled>Finish</button>
                 </div>
             </div>
             <div class="row">
                 <div class="col">
                         <div class="list-group">
+                            <file-component v-for="file in files" v-bind:file="file">
                             <span href="#" class="list-group-item list-group-item-action flex-column align-items-start">
                                 <div class="d-flex w-100 justify-content-between">
                                     <h5 class="mb-1">sometextfile.txt</h5>
                                     <small>31 / 432 Kbytes</small>
                                 </div>
                                 <div class="progress">
-                                    <div class="progress-bar" style="width: 30%;" role="progressbar" aria-valuenow="30" aria-valuemin="0" aria-valuemax="100"></div>
+                                    <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 30%;" role="progressbar" aria-valuenow="30" aria-valuemin="0" aria-valuemax="100"></div>
                                 </div>
                                 <small>Uploading: 542 kb/sec - ETA 4 secs</small>
                             </span>
@@ -77,11 +88,13 @@
                 </div>
             </div>
         </div>
-
+    </div>
     <!-- Optional JavaScript -->
     <!-- jQuery first, then Popper.js, then Bootstrap JS -->
     <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
-  </body>
+    <script src="https://unpkg.com/vue"></script>
+    <script src="/static/app.js"></script>
+</body>
 </html>
