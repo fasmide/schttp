@@ -2,6 +2,11 @@ Vue.component('file-component', {
     props: [
         "file" // the raw File type
     ],
+    data() {
+        return {
+            state: "queued"
+        }
+    },
     computed: {
         humanSize() {
             return humanFileSize(this.file.size, true)
@@ -31,7 +36,9 @@ var app = new Vue({
     el: '#app',
     data: {
         scpCommand: 'scp -r scp.click:HvL5Q8qmg .',
-        files: []
+        files: [],
+        ws: undefined,
+        nextId: 1,
     },
     methods: {
         appendFiles(refName) {
@@ -43,11 +50,51 @@ var app = new Vue({
             while ( i < len ) {
                 // localize file var in the loop
                 var file = this.$refs[refName].files[i]
-                file.id = uniqueID()
+
+                // lets just throw id on to it
+                file.id = this.nextId
+                this.nextId++
+                
                 this.files.push(file)
                 i++
             }    
         }
+    },
+    mounted() {
+
+        // WebSocket wants absolute urls
+        // figure out if we are on http(s) and what our hostname is
+        var loc = window.location, new_uri;
+        if (loc.protocol === "https:") {
+            new_uri = "wss:";
+        } else {
+            new_uri = "ws:";
+        }
+        new_uri += "//" + loc.host;
+        new_uri += "/source/";
+        
+        ws = new WebSocket(new_uri);
+        ws.binaryType = "arraybuffer";
+
+        ws.onopen = function(evt) {
+            console.log("OPEN");
+            ws.send("hello")
+        }
+        
+        ws.onclose = function(evt) {
+            console.log("CLOSE");
+            ws = null;
+        }
+        
+        ws.onmessage = function(evt) {
+            console.log("RESPONSE: ", evt.data);
+        }
+
+        ws.onerror = function(evt) {
+            console.log("ERROR: ", evt.data);
+        }
+
+        this.ws = ws
     }
 })
 
@@ -67,7 +114,3 @@ function humanFileSize(bytes, si) {
     } while(Math.abs(bytes) >= thresh && u < units.length - 1);
     return bytes.toFixed(1)+' '+units[u];
 }
-
-function uniqueID() {
-    return '_' + Math.random().toString(36).substr(2, 9)
-};
