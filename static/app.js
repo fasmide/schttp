@@ -4,14 +4,14 @@ Vue.component('file-component', {
     ],
     computed: {
         humanSize() {
-            return humanFileSize(this.file.size, true);
+            return humanFileSize(this.file.size, true)
         },
         // Use the full path or just the name if its empty
         name() {
             if (this.file.webkitRelativePath) {
-                return this.file.webkitRelativePath;
+                return this.file.webkitRelativePath
             }
-            return this.file.name;
+            return this.file.name
         }
     },
     template: `<span href="#" class="list-group-item list-group-item-action flex-column align-items-start">
@@ -37,14 +37,15 @@ var app = new Vue({
         appendFiles(refName) {
             // it seems what we are dealing with here is not really "arrays"
             // so we must loop them to add them into this.files
-            var len = this.$refs[refName].files.length;
-            var i = 0;
+            var len = this.$refs[refName].files.length
+            var i = 0
             
             while ( i < len ) {
                 // localize file var in the loop
-                var file = this.$refs[refName].files[i];
+                var file = this.$refs[refName].files[i]
+                file.id = uniqueID()
                 this.files.push(file)
-                i++;
+                i++
             }    
         }
     }
@@ -66,3 +67,7 @@ function humanFileSize(bytes, si) {
     } while(Math.abs(bytes) >= thresh && u < units.length - 1);
     return bytes.toFixed(1)+' '+units[u];
 }
+
+function uniqueID() {
+    return '_' + Math.random().toString(36).substr(2, 9)
+};
