@@ -12,7 +12,6 @@ import (
 
 	"github.com/fasmide/schttp/packer"
 	"github.com/gobuffalo/packr/v2"
-	"github.com/gorilla/websocket"
 	"github.com/spf13/viper"
 )
 
@@ -119,21 +118,9 @@ func (s *Server) Sink(w http.ResponseWriter, r *http.Request) {
 
 }
 
-var upgrader = websocket.Upgrader{} // use default options
 func (s *Server) Source(w http.ResponseWriter, r *http.Request) {
-	c, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Print("upgrade:", err)
-		return
-	}
-	defer c.Close()
-	for {
-		mt, r, err := c.NextReader()
-		if err != nil {
-			log.Println("read:", err)
-			break
-		}
-		n, err := io.Copy(ioutil.Discard, r)
-		log.Printf("Just discarded %d bytes, mt: %d", n, mt)
-	}
+	defer r.Body.Close()
+
+	n, _ := io.Copy(ioutil.Discard, r.Body)
+	log.Printf("Just discarded %d bytes", n)
 }

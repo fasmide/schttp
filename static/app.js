@@ -12,15 +12,29 @@ Vue.component('file-component', {
                 return this.file.raw.webkitRelativePath
             }
             return this.file.raw.name
+        },
+        progressStyle() {
+            return "width: " + this.file.progress + "%;"
+        },
+        progressState() {
+            if (this.file.state == "transfered") {
+                return {
+                    "bg-success": true
+                }
+            }
+            return {}
+        },
+        humanLoadedSize() {
+            return humanFileSize(this.file.loaded, true)
         }
     },
     template: `<span href="#" class="list-group-item list-group-item-action flex-column align-items-start">
     <div class="d-flex w-100 justify-content-between">
         <h5 class="mb-1">{{ name }}</h5>
-        <small> 0 / {{ humanSize }}</small>
+        <small> {{ humanLoadedSize }} / {{ humanSize }}</small>
     </div>
     <div class="progress">
-        <div class="progress-bar" style="width: 0%;" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+        <div class="progress-bar" :class="progressState" :style="progressStyle" role="progressbar"></div>
     </div>
     <small>{{ file.state }}</small>
     </span>`
@@ -32,7 +46,6 @@ var app = new Vue({
     data: {
         scpCommand: 'scp -r scp.click:HvL5Q8qmg .',
         files: [],
-        ws: undefined,
         nextId: 1,
         transferReady: true,
     },
@@ -64,12 +77,10 @@ var app = new Vue({
             if (file.state != "queued") {
                 return
             }
-            var reader = new FileReader();
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/source/', true);
 
-            reader.onload = function(e) {
-
-                
-                this.ws.send(e.target.result)
+            xhr.onload = function() {                
                 console.log("the File has been transferred.")
 
                 file.state = "transfered"
@@ -80,54 +91,21 @@ var app = new Vue({
                 this.transmitNextFile()
             }.bind(this)
 
-            
+          
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    file.progress = (e.loaded / e.total) * 100
+                    file.loaded = e.loaded
+                    console.log("progress", file.progress, e)
 
-            reader.onprogress = (ev) => {
-                console.log("Progress:", ev)
-            }
+                }
+            };
 
-            reader.onerror = (error) => {
-                console.log("filereader error:", error)
-            }
+            // this modern xhr should understand the native File type
+            file.state = "transfering"
+            xhr.send(file.raw);
 
-            reader.readAsArrayBuffer(file.raw);
         }
-    },
-    mounted() {
-
-        // WebSocket wants absolute urls
-        // figure out if we are on http(s) and what our hostname is
-        var loc = window.location, new_uri;
-        if (loc.protocol === "https:") {
-            new_uri = "wss:";
-        } else {
-            new_uri = "ws:";
-        }
-        new_uri += "//" + loc.host;
-        new_uri += "/source/";
-        
-        ws = new WebSocket(new_uri);
-        ws.binaryType = "arraybuffer";
-
-        ws.onopen = function(evt) {
-            console.log("OPEN");
-            ws.send("hello")
-        }
-        
-        ws.onclose = function(evt) {
-            console.log("CLOSE");
-            ws = null;
-        }
-        
-        ws.onmessage = function(evt) {
-            console.log("RESPONSE: ", evt.data);
-        }
-
-        ws.onerror = function(evt) {
-            console.log("ERROR: ", evt.data);
-        }
-
-        this.ws = ws
     }
 })
 
@@ -136,6 +114,8 @@ function NewFile(id, file) {
         id: id,
         raw: file,
         state: "queued",
+        progress: 0,
+        loaded: 0
     }
 }
 
