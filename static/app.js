@@ -1,22 +1,17 @@
 Vue.component('file-component', { 
     props: [
-        "file" // the raw File type
+        "file" // Our definition of a file
     ],
-    data() {
-        return {
-            state: "queued"
-        }
-    },
     computed: {
         humanSize() {
-            return humanFileSize(this.file.size, true)
+            return humanFileSize(this.file.raw.size, true)
         },
         // Use the full path or just the name if its empty
         name() {
-            if (this.file.webkitRelativePath) {
-                return this.file.webkitRelativePath
+            if (this.file.raw.webkitRelativePath) {
+                return this.file.raw.webkitRelativePath
             }
-            return this.file.name
+            return this.file.raw.name
         }
     },
     template: `<span href="#" class="list-group-item list-group-item-action flex-column align-items-start">
@@ -27,7 +22,7 @@ Vue.component('file-component', {
     <div class="progress">
         <div class="progress-bar" style="width: 0%;" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
     </div>
-    <small>Queued</small>
+    <small>{{ file.state }}</small>
     </span>`
 })
 
@@ -39,6 +34,7 @@ var app = new Vue({
         files: [],
         ws: undefined,
         nextId: 1,
+        transferReady: true,
     },
     methods: {
         appendFiles(refName) {
@@ -49,15 +45,52 @@ var app = new Vue({
             
             while ( i < len ) {
                 // localize file var in the loop
-                var file = this.$refs[refName].files[i]
 
-                // lets just throw id on to it
-                file.id = this.nextId
+                var file = NewFile(this.nextId, this.$refs[refName].files[i])
                 this.nextId++
                 
-                this.files.push(file)
+                this.files.unshift(file)
                 i++
+            }
+
+            if (this.transferReady) {
+                this.transmitNextFile()
             }    
+        },
+        // transmitNextFile reads files from the top of this.files
+        // and transmit's it - then i calls it self again
+        transmitNextFile() {
+            var file = this.files[0];
+            if (file.state != "queued") {
+                return
+            }
+            var reader = new FileReader();
+
+            reader.onload = function(e) {
+
+                
+                this.ws.send(e.target.result)
+                console.log("the File has been transferred.")
+
+                file.state = "transfered"
+                
+                // put this top file at the bottom of the array
+                this.files.push(this.files.shift())
+                
+                this.transmitNextFile()
+            }.bind(this)
+
+            
+
+            reader.onprogress = (ev) => {
+                console.log("Progress:", ev)
+            }
+
+            reader.onerror = (error) => {
+                console.log("filereader error:", error)
+            }
+
+            reader.readAsArrayBuffer(file.raw);
         }
     },
     mounted() {
@@ -97,6 +130,14 @@ var app = new Vue({
         this.ws = ws
     }
 })
+
+function NewFile(id, file) {
+    return {
+        id: id,
+        raw: file,
+        state: "queued",
+    }
+}
 
 // special thanks to `mpen` from https://stackoverflow.com/questions/10420352/converting-file-size-in-bytes-to-human-readable-string
 function humanFileSize(bytes, si) {
