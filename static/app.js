@@ -26,6 +26,20 @@ Vue.component('file-component', {
         },
         humanLoadedSize() {
             return humanFileSize(this.file.loaded, true)
+        },
+        status() {
+            switch (this.file.state) {
+                case "queued":
+                    return "In Queue"
+                case "transfering":
+                    return "Uploading: 542 kb/sec - ETA 4 secs"
+                case "transfered":
+                    var delta = (this.file.finishedAt - this.file.startedAt) / 1000
+                    var speed = this.file.raw.size/delta
+                    return "Completed in " + delta + " seconds at " + humanFileSize(speed, true) + "/sec"
+                default:
+                    return "dafuq is \"" + this.file.state + "\" state?"
+            }
         }
     },
     template: `<span href="#" class="list-group-item list-group-item-action flex-column align-items-start">
@@ -36,7 +50,7 @@ Vue.component('file-component', {
     <div class="progress">
         <div class="progress-bar" :class="progressState" :style="progressStyle" role="progressbar"></div>
     </div>
-    <small>{{ file.state }}</small>
+    <small>{{ status }}</small>
     </span>`
 })
 
@@ -73,21 +87,28 @@ var app = new Vue({
         // transmitNextFile reads files from the top of this.files
         // and transmit's it - then i calls it self again
         transmitNextFile() {
+            // should we work on this file?
             var file = this.files[0];
             if (file.state != "queued") {
                 return
             }
+
+            // initialize new POST request
             var xhr = new XMLHttpRequest();
             xhr.open('POST', '/source/', true);
 
+            // onload fires when the file have been uploaded
+            // TODO: this should have some error checking i guess
             xhr.onload = function() {                
                 console.log("the File has been transferred.")
 
                 file.state = "transfered"
-                
+                file.finishedAt = Date.now()
+
                 // put this top file at the bottom of the array
                 this.files.push(this.files.shift())
                 
+                // advance to the next file
                 this.transmitNextFile()
             }.bind(this)
 
@@ -96,13 +117,12 @@ var app = new Vue({
                 if (e.lengthComputable) {
                     file.progress = (e.loaded / e.total) * 100
                     file.loaded = e.loaded
-                    console.log("progress", file.progress, e)
-
                 }
             };
 
             // this modern xhr should understand the native File type
             file.state = "transfering"
+            file.startedAt = Date.now()
             xhr.send(file.raw);
 
         }
@@ -115,7 +135,9 @@ function NewFile(id, file) {
         raw: file,
         state: "queued",
         progress: 0,
-        loaded: 0
+        loaded: 0,
+        startedAt: 0,
+        finishedAt: 0
     }
 }
 
