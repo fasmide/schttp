@@ -22,6 +22,11 @@ Vue.component('file-component', {
                     "bg-success": true
                 }
             }
+            if (this.file.state == "failed") {
+                return {
+                    "bg-danger": true
+                }
+            }
             return {}
         },
         humanLoadedSize() {
@@ -37,8 +42,11 @@ Vue.component('file-component', {
                     var delta = (this.file.finishedAt - this.file.startedAt) / 1000
                     var speed = this.file.raw.size/delta
                     return "Completed in " + delta + " seconds at " + humanFileSize(speed, true) + "/sec"
+                case "failed":
+                    return this.file.message
                 default:
-                    return "dafuq is \"" + this.file.state + "\" state?"
+                    console.log("unknown file state:", this.file.state)
+                    return "N/A"
             }
         }
     },
@@ -99,7 +107,13 @@ var app = new Vue({
 
             // onload fires when the file have been uploaded
             // TODO: this should have some error checking i guess
-            xhr.onload = function() {                
+            xhr.onload = () => {
+                if (xhr.status != 200) {
+                    file.state = "failed"
+                    file.message = xhr.status + ": " + xhr.response
+                    return
+                }    
+
                 console.log("the File has been transferred.")
 
                 file.state = "transfered"
@@ -110,13 +124,26 @@ var app = new Vue({
                 
                 // advance to the next file
                 this.transmitNextFile()
-            }.bind(this)
+            }
 
-          
+            // these are only network errors and misuse of xhrhttprequest
+            // e.g. with in valid urls - i dont know any way to read the 
+            // error message
+            xhr.onerror = () => {
+                file.state = "failed"
+                file.message = "Communication error"
+
+                // should we advance to the next file? not quite sure
+            }
+            
+            var lastLoaded, lastTime = 0
             xhr.upload.onprogress = (e) => {
                 if (e.lengthComputable) {
                     file.progress = (e.loaded / e.total) * 100
                     file.loaded = e.loaded
+                }
+                if (lastTime == 0) {
+                    
                 }
             };
 
@@ -135,9 +162,11 @@ function NewFile(id, file) {
         raw: file,
         state: "queued",
         progress: 0,
+        speed: 0,
         loaded: 0,
         startedAt: 0,
-        finishedAt: 0
+        finishedAt: 0,
+        message: "",
     }
 }
 
