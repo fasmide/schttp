@@ -37,7 +37,7 @@ Vue.component('file-component', {
                 case "queued":
                     return "In Queue"
                 case "transfering":
-                    return "Uploading: " + humanFileSize(this.file.rate, true) + "/sec - ETA n seconds"
+                    return "Uploading: " + humanFileSize(this.file.rate, true) + "/sec"
                 case "transfered":
                     var delta = (this.file.finishedAt - this.file.startedAt) / 1000
                     var rate = this.file.raw.size/delta
