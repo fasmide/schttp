@@ -167,14 +167,29 @@ var app = new Vue({
 
 function NewFile(id, file) {
     return {
+        // id is used by vue to optimize the view somehow
         id: id,
+
+        // raw is the browser's native File type
         raw: file,
+
+        // state holds queued, transfering, transfered or failed
         state: "queued",
+
+        // progress in percentage
         progress: 0,
+
+        // rate in bytes pr second
         rate: 0,
+
+        // how many bytes are currently sent
         loaded: 0,
+
+        // started and finished times
         startedAt: 0,
         finishedAt: 0,
+
+        // If schttp returns an non 200 code - here will be a message
         message: "",
     }
 }
