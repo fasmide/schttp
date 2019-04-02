@@ -37,11 +37,11 @@ Vue.component('file-component', {
                 case "queued":
                     return "In Queue"
                 case "transfering":
-                    return "Uploading: 542 kb/sec - ETA 4 secs"
+                    return "Uploading: " + humanFileSize(this.file.rate, true) + "/sec - ETA n seconds"
                 case "transfered":
                     var delta = (this.file.finishedAt - this.file.startedAt) / 1000
-                    var speed = this.file.raw.size/delta
-                    return "Completed in " + delta + " seconds at " + humanFileSize(speed, true) + "/sec"
+                    var rate = this.file.raw.size/delta
+                    return "Completed in " + delta + " seconds at " + humanFileSize(rate, true) + "/sec"
                 case "failed":
                     return this.file.message
                 default:
@@ -114,8 +114,6 @@ var app = new Vue({
                     return
                 }    
 
-                console.log("the File has been transferred.")
-
                 file.state = "transfered"
                 file.finishedAt = Date.now()
 
@@ -136,16 +134,27 @@ var app = new Vue({
                 // should we advance to the next file? not quite sure
             }
             
-            var lastLoaded, lastTime = 0
+            var lastUpdate = 0
             xhr.upload.onprogress = (e) => {
+                // if lastUpdate is zero this is the first update we have
+                // we must use startedAt instead of lastUpdate
+                var deltaTime = 0
+                if (lastUpdate == 0) {
+                    deltaTime = Date.now() - file.startedAt
+                } else {
+                    deltaTime = Date.now() - lastUpdate
+                }
+
+                var deltaRate = e.loaded - file.loaded
+                file.rate = deltaRate * (1000 / deltaTime)
+
+                file.loaded = e.loaded
+                lastUpdate = Date.now()
+                
                 if (e.lengthComputable) {
                     file.progress = (e.loaded / e.total) * 100
-                    file.loaded = e.loaded
                 }
-                if (lastTime == 0) {
-                    
-                }
-            };
+            }
 
             // this modern xhr should understand the native File type
             file.state = "transfering"
@@ -162,7 +171,7 @@ function NewFile(id, file) {
         raw: file,
         state: "queued",
         progress: 0,
-        speed: 0,
+        rate: 0,
         loaded: 0,
         startedAt: 0,
         finishedAt: 0,
