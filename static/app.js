@@ -72,6 +72,28 @@ var app = new Vue({
         transferReady: true,
     },
     methods: {
+        handleDrop(e) {
+            // prevent the browsers default behavior
+            // otherwise it will try to open the file dropped it self
+            e.stopPropagation();
+            e.preventDefault();
+            console.log("Something was dropped", e.dataTransfer.items)
+            
+            var items = event.dataTransfer.items;
+            for (var i=0; i<items.length; i++) {
+                // webkitGetAsEntry is where the magic happens
+                var item = items[i].webkitGetAsEntry();
+                if (item) {
+                    this.traverseItem(item);
+                }
+            }
+            console.log("transmit?", this.transferReady)
+            // transmit files if we are ready
+            if (this.transferReady) {
+                this.transmitNextFile()
+            } 
+            
+        },
         appendFiles(refName) {
             // it seems what we are dealing with here is not really "arrays"
             // so we must loop them to add them into this.files
@@ -91,6 +113,30 @@ var app = new Vue({
             if (this.transferReady) {
                 this.transmitNextFile()
             }    
+        },
+        async traverseItem(item, path) {
+            path = path || ""
+            if (item.isFile) {
+                // Get file
+                item.file((file) => {
+                    console.log("File:", path, file)
+
+                    // inject back webkitRelativePath property
+                    file.webkitRelativePath = path + "/" + file.name
+                    
+                    var f = NewFile(this.nextId, file)
+                    this.nextId++
+                    this.files.unshift(f)
+                });
+            } else if (item.isDirectory) {
+                // Get folder contents
+                var dirReader = item.createReader();
+                dirReader.readEntries((entries) => {
+                    for (var i=0; i<entries.length; i++) {
+                        this.traverseItem(entries[i], path + item.name + "/");
+                    }
+                });
+            }
         },
         // transmitNextFile reads files from the top of this.files
         // and transmit's it - then i calls it self again

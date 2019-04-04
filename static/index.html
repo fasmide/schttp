@@ -11,7 +11,7 @@
     <title>schttp</title>
   </head>
   <body>
-      <div id="app">
+      <div id="app" @dragover.prevent @drop="handleDrop">
       <div class="container" style="margin-top: 15px; margin-bottom: 15px;">
           <div class="row">
               <div class="col">
