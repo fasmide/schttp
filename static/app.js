@@ -95,6 +95,12 @@ var app = new Vue({
         // transmitNextFile reads files from the top of this.files
         // and transmit's it - then i calls it self again
         transmitNextFile() {
+
+            // are there any files?
+            if (this.files.length <= 0) {
+                return
+            }
+
             // should we work on this file?
             var file = this.files[0];
             if (file.state != "queued") {
