@@ -6,13 +6,6 @@ Vue.component('file-component', {
         humanSize() {
             return humanFileSize(this.file.raw.size, true)
         },
-        // Use the full path or just the name if its empty
-        name() {
-            if (this.file.raw.webkitRelativePath) {
-                return this.file.raw.webkitRelativePath
-            }
-            return this.file.raw.name
-        },
         progressStyle() {
             return "width: " + this.file.progress + "%;"
         },
@@ -52,7 +45,7 @@ Vue.component('file-component', {
     },
     template: `<span href="#" class="list-group-item list-group-item-action flex-column align-items-start">
     <div class="d-flex w-100 justify-content-between">
-        <h5 class="mb-1">{{ name }}</h5>
+        <h5 class="mb-1">{{ file.path }}</h5>
         <small> {{ humanLoadedSize }} / {{ humanSize }}</small>
     </div>
     <div class="progress">
@@ -72,27 +65,76 @@ var app = new Vue({
         transferReady: true,
     },
     methods: {
-        handleDrop(e) {
+        highlightDrop(state) {
+            if (state) {
+                this.$refs["drophighlight"].classList.remove("d-none")    
+                return
+            }
+            this.$refs["drophighlight"].classList.add("d-none")
+        },
+        async handleDrop(e) {
             // prevent the browsers default behavior
             // otherwise it will try to open the file dropped it self
-            e.stopPropagation();
-            e.preventDefault();
-            console.log("Something was dropped", e.dataTransfer.items)
-            
-            var items = event.dataTransfer.items;
-            for (var i=0; i<items.length; i++) {
-                // webkitGetAsEntry is where the magic happens
-                var item = items[i].webkitGetAsEntry();
-                if (item) {
-                    this.traverseItem(item);
+            e.stopPropagation()
+            e.preventDefault()
+
+            // hide the dropzone
+            this.highlightDrop(false)
+
+            return new Promise(async (resolve) => {   
+                var items = event.dataTransfer.items
+                for (var i=0; i<items.length; i++) {
+                    // webkitGetAsEntry is where the magic happens
+                    var item = items[i].webkitGetAsEntry()
+                    if (item) {
+                        await this.traverseItem(item)
+                    }
                 }
-            }
-            console.log("transmit?", this.transferReady)
-            // transmit files if we are ready
-            if (this.transferReady) {
-                this.transmitNextFile()
-            } 
-            
+
+                // transmit files if we are ready
+                if (this.transferReady) {
+                    this.transmitNextFile()
+                } 
+                resolve()
+            })
+        },
+        // TODO: instead of adding every single file to this.files
+        // we should be able to handle directories as a single unit
+        async traverseItem(item, path) {
+            return new Promise(async (resolve) => {
+                path = path || ""
+                
+                if (item.isFile) {
+                    // Get file
+                    item.file((file) => {
+                        
+                        var f = NewFile(this.nextId, file)
+                        f.path = path + file.name;
+                        this.nextId++
+                        
+                        this.files.unshift(f)
+                        resolve()
+                    });
+                    return
+                }
+
+                if (item.isDirectory) {
+                    // Get folder contents
+                    var dirReader = item.createReader();
+                    dirReader.readEntries(async (entries) => {
+                        for (var i=0; i<entries.length; i++) {
+                            await this.traverseItem(entries[i], path + item.name + "/");
+                        }
+                        resolve()
+                    });
+                    return
+                }
+
+                // so it was not a file, and it was no directory....
+                console.log("Found something that was no file or directory", item)
+                resolve()
+                
+            })
         },
         appendFiles(refName) {
             // it seems what we are dealing with here is not really "arrays"
@@ -104,6 +146,7 @@ var app = new Vue({
                 // localize file var in the loop
 
                 var file = NewFile(this.nextId, this.$refs[refName].files[i])
+                file.path = file.raw.webkitRelativePath || file.raw.name
                 this.nextId++
                 
                 this.files.unshift(file)
@@ -113,30 +156,6 @@ var app = new Vue({
             if (this.transferReady) {
                 this.transmitNextFile()
             }    
-        },
-        async traverseItem(item, path) {
-            path = path || ""
-            if (item.isFile) {
-                // Get file
-                item.file((file) => {
-                    console.log("File:", path, file)
-
-                    // inject back webkitRelativePath property
-                    file.webkitRelativePath = path + "/" + file.name
-                    
-                    var f = NewFile(this.nextId, file)
-                    this.nextId++
-                    this.files.unshift(f)
-                });
-            } else if (item.isDirectory) {
-                // Get folder contents
-                var dirReader = item.createReader();
-                dirReader.readEntries((entries) => {
-                    for (var i=0; i<entries.length; i++) {
-                        this.traverseItem(entries[i], path + item.name + "/");
-                    }
-                });
-            }
         },
         // transmitNextFile reads files from the top of this.files
         // and transmit's it - then i calls it self again
@@ -224,6 +243,9 @@ function NewFile(id, file) {
 
         // raw is the browser's native File type
         raw: file,
+
+        // path to the file
+        path: "",
 
         // state holds queued, transfering, transfered or failed
         state: "queued",
