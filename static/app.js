@@ -43,16 +43,14 @@ Vue.component('file-component', {
             }
         }
     },
-    template: `<span href="#" class="list-group-item list-group-item-action flex-column align-items-start">
-    <div class="d-flex w-100 justify-content-between">
-        <h5 class="mb-1">{{ file.path }}</h5>
+    template: `<span href="#" class="list-group-item flex-column align-items-start">
+    <h5 class="mb-1 text-truncate">{{ file.path }}</h5>
+    <div class="progress"><div class="progress-bar" :class="progressState" :style="progressStyle" role="progressbar"></div></div>
+    <span class="d-flex justify-content-between">
+        <small>{{ status }}</small>
         <small> {{ humanLoadedSize }} / {{ humanSize }}</small>
-    </div>
-    <div class="progress">
-        <div class="progress-bar" :class="progressState" :style="progressStyle" role="progressbar"></div>
-    </div>
-    <small>{{ status }}</small>
-    </span>`
+    </span>
+</span>`
 })
 
 
