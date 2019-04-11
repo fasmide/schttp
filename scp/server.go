@@ -68,13 +68,7 @@ func NewServer() *Server {
 	// - Anyone can login with any combination of user and password
 	// - Any public key is accepted
 	config := &ssh.ServerConfig{
-		PasswordCallback: func(c ssh.ConnMetadata, pass []byte) (*ssh.Permissions, error) {
-			return nil, nil
-		},
-
-		PublicKeyCallback: func(c ssh.ConnMetadata, pubKey ssh.PublicKey) (*ssh.Permissions, error) {
-			return nil, nil
-		},
+		NoClientAuth:   true,
 		ServerVersion:  "SSH-2.0-schttp",
 		BannerCallback: SSHBanner,
 		Config: ssh.Config{
