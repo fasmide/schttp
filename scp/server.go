@@ -2,14 +2,13 @@ package scp
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"net"
 	"strings"
-	"sync"
 
-	"github.com/fasmide/schttp/packer"
+	"github.com/fasmide/schttp/database"
+
 	"golang.org/x/crypto/ssh"
 )
 
@@ -43,11 +42,6 @@ const Banner = `
 `
 
 type Server struct {
-	sync.Mutex
-
-	sinks   map[string]*Sink
-	sources map[string]*Source
-
 	listener  net.Listener
 	sshConfig *ssh.ServerConfig
 
@@ -95,8 +89,6 @@ func NewServer() *Server {
 	config.AddHostKey(hostkey)
 
 	return &Server{
-		sinks:     make(map[string]*Sink),
-		sources:   make(map[string]*Source),
 		sshConfig: config,
 	}
 }
@@ -105,51 +97,10 @@ func SSHBanner(meta ssh.ConnMetadata) string {
 	return fmt.Sprintf(Banner, meta.RemoteAddr().String())
 }
 
-func (s *Server) Sink(id string) (packer.PackerTo, error) {
-	s.Lock()
-	defer s.Unlock()
-
-	if sink, exists := s.sinks[id]; exists {
-		delete(s.sinks, id)
-		return sink, nil
-	}
-	return nil, fmt.Errorf("%s does not exist", id)
-}
-
-func (s *Server) Source(id string) (io.ReaderFrom, error) {
-	s.Lock()
-	defer s.Unlock()
-
-	if source, exists := s.sources[id]; exists {
-		delete(s.sources, id)
-		return source, nil
-	}
-	return nil, fmt.Errorf("%s does not exist", id)
-}
-
-// Shutdown sends a message to all clients with transfers that have yet to start
-// and disconnects them
+// Shutdown closes the listener
 func (s *Server) Shutdown(msg string) {
 	// we should not accept any more connections
 	s.listener.Close()
-
-	s.Lock()
-
-	// set shutdown bit + message
-	s.shutdown = true
-	s.shutdownMessage = msg
-
-	for k, v := range s.sinks {
-		// its kind of hacky to address a field of sink directly
-		fmt.Fprint(v.channel.Stderr(), msg)
-		v.channel.SendRequest("exit-status", false, ssh.Marshal(&ExitStatus{Status: 1}))
-		v.channel.Close()
-		delete(s.sinks, k)
-	}
-
-	// TODO: Do the same thing for sources at some point
-
-	s.Unlock()
 }
 
 // Listen listens for new ssh connections
@@ -232,7 +183,7 @@ func (s *Server) acceptSCP(c net.Conn) {
 						req.Reply(false, nil)
 						continue
 					}
-
+					database.Add(sink)
 					log.Printf("Sink from %s, with id %s", c.RemoteAddr().String(), sink.ID)
 
 					s.Lock()

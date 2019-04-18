@@ -48,8 +48,13 @@ func NewSink(c ssh.Channel) (*Sink, error) {
 	return s, nil
 }
 
-// PackTo accepts a PackerCloser and adds files from the transfer to it
-func (s *Sink) PackTo(p packer.PackerCloser) error {
+// Packer just declines to accept files
+func (s *Sink) Packer() (packer.PackerCloser, error) {
+	return nil, fmt.Errorf("Cannot accept files")
+}
+
+// TransferTo accepts a PackerCloser and adds files from the transfer to it
+func (s *Sink) TransferTo(p packer.PackerCloser) error {
 
 	err := s.Pack(p)
 	if err != nil && err != io.EOF {
