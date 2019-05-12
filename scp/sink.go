@@ -48,9 +48,9 @@ func NewSink(c ssh.Channel) (*Sink, error) {
 	return s, nil
 }
 
-// Packer just declines to accept files
-func (s *Sink) Packer() (packer.PackerCloser, error) {
-	return nil, fmt.Errorf("Cannot accept files")
+// Transfer just declines to accept files
+func (s *Sink) Transfer() (packer.PackerCloser, error) {
+	return nil, fmt.Errorf("this is a scp sink - it cannot accept files")
 }
 
 // TransferTo accepts a PackerCloser and adds files from the transfer to it

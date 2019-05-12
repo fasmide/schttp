@@ -7,6 +7,6 @@ type Transfer interface {
 	// TransferTo must accept a PackerCloser and send files to it
 	TransferTo(packer.PackerCloser) error
 
-	// Packer must return a PackerCloser (typically just it self - if it supports receiving files)
-	Packer() (packer.PackerCloser, error)
+	// TakeTransfer must return a PackerCloser (typically just it self - if it supports receiving files)
+	TakeTransfer() (packer.PackerCloser, error)
 }

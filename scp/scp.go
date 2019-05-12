@@ -141,7 +141,7 @@ func (s *ScpStream) Pack(p packer.Packer) error {
 		case Directory:
 			p.Enter(c.Name, c.Mode)
 		case Exit:
-			p.Exit()
+			p.Leave()
 		}
 	}
 
