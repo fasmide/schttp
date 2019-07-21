@@ -124,7 +124,7 @@ func (s *schttp) Run() error {
 	s.scpServer = scp.NewServer()
 	go s.scpServer.Listen(s.sshFd)
 
-	s.webServer = &web.Server{DB: s.scpServer}
+	s.webServer = &web.Server{}
 	go s.webServer.Listen(s.httpFd)
 
 	log.Printf("schttp is alive")

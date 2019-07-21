@@ -10,6 +10,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/fasmide/schttp/database"
 	"github.com/fasmide/schttp/packer"
 	"github.com/gobuffalo/packr/v2"
 	"github.com/spf13/viper"
@@ -23,18 +24,7 @@ type Server struct {
 	http.ServeMux
 	http.Server
 
-	// We will be looking up sinks and sources from the database
-	// of connected sinks and sources
-	DB DB
-
 	box *packr.Box
-}
-
-// DB specifies methods to find sinks and sources
-// - these must be thread safe
-type DB interface {
-	Sink(string) (packer.PackerTo, error)
-	Source(string) (io.ReaderFrom, error)
 }
 
 func (s *Server) Listen(l net.Listener) {
@@ -101,7 +91,7 @@ func (s *Server) Sink(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// find the sink in question
-	sink, err := s.DB.Sink(id)
+	sink, err := database.Fetch(id)
 	if err != nil {
 		// the only error available from Sink is a 404 style error
 		http.Error(w, err.Error(), http.StatusNotFound)

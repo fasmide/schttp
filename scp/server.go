@@ -2,14 +2,12 @@ package scp
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"net"
 	"strings"
 	"sync"
 
-	"github.com/fasmide/schttp/packer"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -44,9 +42,6 @@ const Banner = `
 
 type Server struct {
 	sync.Mutex
-
-	sinks   map[string]*Sink
-	sources map[string]*Source
 
 	listener  net.Listener
 	sshConfig *ssh.ServerConfig
@@ -95,36 +90,12 @@ func NewServer() *Server {
 	config.AddHostKey(hostkey)
 
 	return &Server{
-		sinks:     make(map[string]*Sink),
-		sources:   make(map[string]*Source),
 		sshConfig: config,
 	}
 }
 
 func SSHBanner(meta ssh.ConnMetadata) string {
 	return fmt.Sprintf(Banner, meta.RemoteAddr().String())
-}
-
-func (s *Server) Sink(id string) (packer.PackerTo, error) {
-	s.Lock()
-	defer s.Unlock()
-
-	if sink, exists := s.sinks[id]; exists {
-		delete(s.sinks, id)
-		return sink, nil
-	}
-	return nil, fmt.Errorf("%s does not exist", id)
-}
-
-func (s *Server) Source(id string) (io.ReaderFrom, error) {
-	s.Lock()
-	defer s.Unlock()
-
-	if source, exists := s.sources[id]; exists {
-		delete(s.sources, id)
-		return source, nil
-	}
-	return nil, fmt.Errorf("%s does not exist", id)
 }
 
 // Shutdown sends a message to all clients with transfers that have yet to start
@@ -137,17 +108,10 @@ func (s *Server) Shutdown(msg string) {
 
 	// set shutdown bit + message
 	s.shutdown = true
+
+	// we are racing with clients that are currently authenticating
+	// save the massage and turn them down when they are ready
 	s.shutdownMessage = msg
-
-	for k, v := range s.sinks {
-		// its kind of hacky to address a field of sink directly
-		fmt.Fprint(v.channel.Stderr(), msg)
-		v.channel.SendRequest("exit-status", false, ssh.Marshal(&ExitStatus{Status: 1}))
-		v.channel.Close()
-		delete(s.sinks, k)
-	}
-
-	// TODO: Do the same thing for sources at some point
 
 	s.Unlock()
 }
@@ -243,7 +207,6 @@ func (s *Server) acceptSCP(c net.Conn) {
 						req.Reply(false, nil)
 						continue
 					}
-					s.sinks[sink.ID] = sink
 					s.Unlock()
 
 					req.Reply(true, nil)

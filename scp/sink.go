@@ -7,12 +7,13 @@ import (
 	"log"
 	"path"
 
+	"github.com/fasmide/schttp/database"
 	"github.com/fasmide/schttp/packer"
 	"github.com/spf13/viper"
-	"github.com/teris-io/shortid"
 	"golang.org/x/crypto/ssh"
 )
 
+// Sink is a client that sends files into schttp (schttp sinks files)
 type Sink struct {
 	*ScpStream
 	ID      string
@@ -35,17 +36,24 @@ const SinkBanner = `    -----------------------
 // NewSink returns a new initialized *Sink and prints a welcome message
 func NewSink(c ssh.Channel) (*Sink, error) {
 
-	id, err := shortid.Generate()
+	s := &Sink{channel: c, ScpStream: &ScpStream{Writer: c, Reader: bufio.NewReader(c)}}
+
+	id, err := database.Add(s)
 	if err != nil {
 		return nil, err
 	}
-	s := &Sink{ID: id, channel: c, ScpStream: &ScpStream{Writer: c, Reader: bufio.NewReader(c)}}
+	s.ID = id
 
 	// say hello to our customer
 	url := fmt.Sprintf("%s%s", viper.GetString("ADVERTISE_URL"), path.Join("sink", s.ID))
 	fmt.Fprintf(c.Stderr(), SinkBanner, url, url, url)
 
 	return s, nil
+}
+
+// Packer fullfills database.Transfer by providing an error message
+func (s *Sink) Packer() (packer.PackerCloser, error) {
+	return nil, fmt.Errorf("%T cannot accept files", s)
 }
 
 // PackTo accepts a PackerCloser and adds files from the transfer to it
