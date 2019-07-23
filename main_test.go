@@ -58,8 +58,8 @@ func TestMain(t *testing.T) {
 		schttp.scpServer = scp.NewServer()
 		go schttp.scpServer.Listen(schttp.sshFd)
 
-		schttp.webServer = &web.Server{}
-		go schttp.webServer.Listen(schttp.httpFd)
+		schttp.webServer = web.NewServer()
+		go schttp.webServer.Serve(schttp.httpFd)
 
 		// wait here till we are finished testing
 		shutdown.Wait()

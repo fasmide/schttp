@@ -57,10 +57,20 @@ Vue.component('file-component', {
 var app = new Vue({
     el: '#app',
     data: {
-        scpCommand: 'scp -r scp.click:HvL5Q8qmg .',
+        id: "N/A",
         files: [],
         nextId: 1,
         transferReady: true,
+    },
+    mounted() {
+        // fetch an ID for this transfer
+        fetch('/newsource/')
+        .then(function(response) {
+            return response.json();
+        })
+        .then((myJson) => {
+            this.id = myJson.ID
+        });
     },
     methods: {
         highlightDrop(state) {
@@ -172,7 +182,7 @@ var app = new Vue({
 
             // initialize new POST request
             var xhr = new XMLHttpRequest();
-            xhr.open('POST', '/source/', true);
+            xhr.open('POST', '/source/' + this.id, true);
 
             // onload fires when the file have been uploaded
             // TODO: this should have some error checking i guess
@@ -230,6 +240,14 @@ var app = new Vue({
             file.startedAt = Date.now()
             xhr.send(file.raw);
 
+        }
+    },
+    computed: {
+        scpCommand() {
+            if (this.id == "N/A") {
+                return "loading...."
+            }
+            return 'scp -r scp.click:'+this.id+' .'
         }
     }
 })

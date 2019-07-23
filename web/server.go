@@ -1,14 +1,13 @@
 package web
 
 import (
+	"encoding/json"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"log"
-	"net"
 	"net/http"
 	"path"
 	"strings"
+	"sync"
 
 	"github.com/fasmide/schttp/database"
 	"github.com/fasmide/schttp/packer"
@@ -24,16 +23,27 @@ type Server struct {
 	http.ServeMux
 	http.Server
 
+	// we have our own storage of users sending files with http
+	// the database does not hold transfers when they are started
+	// and as http is async in nature we have to keep a reference
+	// for when the next HTTP POST comes in with a file
+	sources     map[string]*HTTPSource
+	sourcesLock sync.RWMutex
+
 	box *packr.Box
 }
 
-func (s *Server) Listen(l net.Listener) {
+// NewServer returns a initiated http server
+func NewServer() *Server {
+	s := &Server{sources: make(map[string]*HTTPSource)}
+
 	// set up a new box by giving it a name and an optional (relative) path to a folder on disk:
 	s.box = packr.New("static", "../static")
 
 	// setup routes
 	s.HandleFunc("/sink/", s.Sink)
 	s.HandleFunc("/source/", s.Source)
+	s.HandleFunc("/newsource/", s.NewSource)
 	s.Handle("/static/", http.FileServer(s.box))
 
 	// this is kind of a hack but im unable to make the packr.Box serve the index.html by it self
@@ -43,8 +53,7 @@ func (s *Server) Listen(l net.Listener) {
 	// the handler is embedded in s
 	s.Server.Handler = s
 
-	// Listen for http
-	s.Serve(l)
+	return s
 }
 
 func (s *Server) Index(w http.ResponseWriter, r *http.Request) {
@@ -54,6 +63,31 @@ func (s *Server) Index(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write(b)
+}
+
+// NewSource adds a new source and should be call'ed from the js app
+func (s *Server) NewSource(w http.ResponseWriter, r *http.Request) {
+	// create a new HTTPSource and add it to the database
+	hs := &HTTPSource{}
+	id, err := database.Add(hs)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("cannot create new http source: %s", err), 500)
+		return
+	}
+	hs.ID = id
+
+	// lock sources and add this new source
+	s.sourcesLock.Lock()
+	s.sources[id] = hs
+	s.sourcesLock.Unlock()
+
+	dec := json.NewEncoder(w)
+	err = dec.Encode(hs)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("unable to json encode your data: %s", err), 500)
+		return
+	}
+
 }
 
 func (s *Server) Sink(w http.ResponseWriter, r *http.Request) {
@@ -108,9 +142,17 @@ func (s *Server) Sink(w http.ResponseWriter, r *http.Request) {
 
 }
 
+// Source looks up the given source and passes the http.request to HTTPSource
 func (s *Server) Source(w http.ResponseWriter, r *http.Request) {
-	defer r.Body.Close()
+	id := path.Base(r.URL.Path)
 
-	n, _ := io.Copy(ioutil.Discard, r.Body)
-	log.Printf("Just discarded %d bytes", n)
+	s.sourcesLock.RLock()
+	hs, exists := s.sources[id]
+	s.sourcesLock.RUnlock()
+
+	if !exists {
+		http.Error(w, fmt.Sprintf("No httpsource with id %s exists", id), http.StatusNotFound)
+		return
+	}
+	hs.Accept(r)
 }
