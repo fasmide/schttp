@@ -6,11 +6,14 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/md5"
+	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -43,31 +46,85 @@ func init() {
 	viper.SetDefault("PID_FILE", "/tmp/test_schttp.pid")
 }
 
-// TestMain tests schttp on a high level
-// it tries to send files with standard unix tools
-func TestMain(t *testing.T) {
+func TestMain(m *testing.M) {
 	schttp, err := NewSchttp()
 	if err != nil {
-		t.Fatalf("could not initialize schttp: %s", err)
+		panic(fmt.Sprintf("could not initialize schttp: %s", err))
 	}
 
-	var shutdown sync.WaitGroup
+	schttp.scpServer = scp.NewServer()
+	go schttp.scpServer.Listen(schttp.sshFd)
 
-	shutdown.Add(1)
+	schttp.webServer = web.NewServer()
+	go schttp.webServer.Serve(schttp.httpFd)
+
+	// run tests
+	code := m.Run()
+
+	schttp.scpServer.Shutdown("shutting down test server")
+	schttp.webServer.Shutdown(context.TODO())
+
+	os.Exit(code)
+}
+
+func TestHTTPSourceToZip(t *testing.T) {
+	// first off we must acquire an ID to post files to
+	u := fmt.Sprintf("%s%s", viper.Get("ADVERTISE_URL"), "newsource")
+	resp, err := http.Get(u)
+	if err != nil {
+		t.Fatalf("unable to get \"%s\": %s", u, err)
+	}
+
+	var idData map[string]string
+	dec := json.NewDecoder(resp.Body)
+	err = dec.Decode(&idData)
+	if err != nil {
+		t.Fatalf("unable to parse id from newsource: %s", err)
+	}
+	resp.Body.Close()
+
+	id := idData["id"]
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
-		schttp.scpServer = scp.NewServer()
-		go schttp.scpServer.Listen(schttp.sshFd)
+		files, err := filepath.Glob("test-directory/*")
+		if err != nil {
+			t.Fatalf("could not find files to send: %s", err)
+		}
+		for _, p := range files {
+			// read test file
+			fd, err := os.Open(p)
+			if err != nil {
+				t.Fatalf("could not read file %s: %s", p, err)
+			}
 
-		schttp.webServer = web.NewServer()
-		go schttp.webServer.Serve(schttp.httpFd)
+			// http post test file
+			resp, err = http.Post(
+				fmt.Sprintf("%s%s/%s/%s", viper.Get("ADVERTISE_URL"), "source", id, p),
+				"application/binary",
+				fd,
+			)
+			if err != nil {
+				t.Fatalf("could not send file: %s", err)
+			}
 
-		// wait here till we are finished testing
-		shutdown.Wait()
-
-		schttp.scpServer.Shutdown("shutting down test server")
-		schttp.webServer.Shutdown(context.TODO())
+			// check status code
+			if resp.StatusCode != http.StatusOK {
+				t.Fatalf("wrong status code when uploading file: %d", resp.StatusCode)
+			}
+		}
+		wg.Done()
 	}()
+	err = downloadKnownPayload(fmt.Sprintf("%s/sink/%s.tar.gz", viper.Get("ADVERTISE_URL"), id))
+	if err != nil {
+		t.Fatalf("known payload failed: %s", err)
+	}
+	wg.Wait()
+}
 
+// TestScpToZip tests schttp on a high level
+// it tries to send files with standard unix tools
+func TestScpToZip(t *testing.T) {
 	scp := exec.Command("scp",
 		"-oStrictHostKeyChecking=no",
 		fmt.Sprintf("-P%d", scpPort),
@@ -101,17 +158,24 @@ func TestMain(t *testing.T) {
 		t.Fatalf("no url found in stderr from scp")
 	}
 
+	err = downloadKnownPayload(url)
+	if err != nil {
+		t.Fatalf("known payload failed: %s", err)
+	}
+}
+
+func downloadKnownPayload(url string) error {
 	// download this url and compare its checksum against a known value
 	response, err := http.Get(url)
 	if err != nil {
-		t.Fatalf("unable to http get %s: %s", url, err)
+		return fmt.Errorf("unable to http get %s: %s", url, err)
 	}
 
 	defer response.Body.Close()
 
 	gzipReader, err := gzip.NewReader(response.Body)
 	if err != nil {
-		t.Fatalf("unable to read gzip: %s", err)
+		return fmt.Errorf("unable to read gzip: %s", err)
 	}
 
 	tarReader := tar.NewReader(gzipReader)
@@ -125,26 +189,25 @@ func TestMain(t *testing.T) {
 			break
 		}
 		if err != nil {
-			t.Fatalf("tar error: %s", err)
+			return fmt.Errorf("tar error: %s", err)
 		}
 
 		// first just append the name of the file
 		_, err = h.Write([]byte(header.Name))
 		if err != nil {
-			t.Fatalf("could not update md5 digest: %s", err)
+			return fmt.Errorf("could not update md5 digest: %s", err)
 		}
 
 		// then the whole content of the file
 		_, err = io.Copy(h, tarReader)
 		if err != nil {
-			t.Fatalf("could not update md5 digest: %s", err)
+			return fmt.Errorf("could not update md5 digest: %s", err)
 		}
 	}
 
 	hexSum := fmt.Sprintf("%x", h.Sum(nil))
 	if hexSum != KnownTestDirectoryHash {
-		t.Fatalf("wrong md5 hash of test-directory zip file: %s != %s", hexSum, KnownTestDirectoryHash)
+		return fmt.Errorf("wrong md5 hash of test-directory zip file: %s != %s", hexSum, KnownTestDirectoryHash)
 	}
-
-	shutdown.Done()
+	return nil
 }

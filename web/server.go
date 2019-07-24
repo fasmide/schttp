@@ -68,7 +68,7 @@ func (s *Server) Index(w http.ResponseWriter, r *http.Request) {
 // NewSource adds a new source and should be call'ed from the js app
 func (s *Server) NewSource(w http.ResponseWriter, r *http.Request) {
 	// create a new HTTPSource and add it to the database
-	hs := &HTTPSource{}
+	hs := NewHTTPSource()
 	id, err := database.Add(hs)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("cannot create new http source: %s", err), 500)
@@ -144,7 +144,10 @@ func (s *Server) Sink(w http.ResponseWriter, r *http.Request) {
 
 // Source looks up the given source and passes the http.request to HTTPSource
 func (s *Server) Source(w http.ResponseWriter, r *http.Request) {
-	id := path.Base(r.URL.Path)
+	urlParts := strings.Split(r.URL.Path, "/")
+
+	// we know that [1] is "/source/" and [2] should be our id
+	id := urlParts[2]
 
 	s.sourcesLock.RLock()
 	hs, exists := s.sources[id]
@@ -154,5 +157,8 @@ func (s *Server) Source(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("No httpsource with id %s exists", id), http.StatusNotFound)
 		return
 	}
-	hs.Accept(r)
+
+	// we know, that everything after [0] and [1] is the path of the file including its filename
+
+	hs.Accept(strings.Join(urlParts[3:], "/"), r.Body)
 }

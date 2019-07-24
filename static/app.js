@@ -57,7 +57,7 @@ Vue.component('file-component', {
 var app = new Vue({
     el: '#app',
     data: {
-        id: "N/A",
+        id: null,
         files: [],
         nextId: 1,
         transferReady: true,
@@ -70,6 +70,9 @@ var app = new Vue({
         })
         .then((myJson) => {
             this.id = myJson.ID
+        })
+        .catch((err) => {
+            console.log("unable to fetch new source id", err)
         });
     },
     methods: {
@@ -182,7 +185,7 @@ var app = new Vue({
 
             // initialize new POST request
             var xhr = new XMLHttpRequest();
-            xhr.open('POST', '/source/' + this.id, true);
+            xhr.open('POST', '/source/' + this.id + "/" + file.path, true);
 
             // onload fires when the file have been uploaded
             // TODO: this should have some error checking i guess
@@ -244,7 +247,7 @@ var app = new Vue({
     },
     computed: {
         scpCommand() {
-            if (this.id == "N/A") {
+            if (this.id === null) {
                 return "loading...."
             }
             return 'scp -r scp.click:'+this.id+' .'
