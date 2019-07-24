@@ -83,19 +83,24 @@ func TestHTTPSourceToZip(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	id := idData["id"]
+	id := idData["ID"]
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		files, err := filepath.Glob("test-directory/*")
-		if err != nil {
-			t.Fatalf("could not find files to send: %s", err)
-		}
-		for _, p := range files {
+		err := filepath.Walk("test-directory/", func(p string, info os.FileInfo, err error) error {
+			if err != nil {
+				return fmt.Errorf("unable to walk path %s: %s", p, info)
+			}
+
+			// skip directories
+			if info.IsDir() {
+				return nil
+			}
+
 			// read test file
 			fd, err := os.Open(p)
 			if err != nil {
-				t.Fatalf("could not read file %s: %s", p, err)
+				return fmt.Errorf("could not read file %s: %s", p, err)
 			}
 
 			// http post test file
@@ -105,16 +110,21 @@ func TestHTTPSourceToZip(t *testing.T) {
 				fd,
 			)
 			if err != nil {
-				t.Fatalf("could not send file: %s", err)
+				return fmt.Errorf("could not send file: %s", err)
 			}
 
 			// check status code
 			if resp.StatusCode != http.StatusOK {
-				t.Fatalf("wrong status code when uploading file: %d", resp.StatusCode)
+				return fmt.Errorf("wrong status code when uploading file: %d", resp.StatusCode)
 			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("failed walking test-directory: %s", err)
 		}
 		wg.Done()
 	}()
+
 	err = downloadKnownPayload(fmt.Sprintf("%s/sink/%s.tar.gz", viper.Get("ADVERTISE_URL"), id))
 	if err != nil {
 		t.Fatalf("known payload failed: %s", err)

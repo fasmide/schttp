@@ -17,6 +17,9 @@ type HTTPSource struct {
 	sync.WaitGroup      `json:"-"`
 	sync.Mutex          `json:"-"`
 
+	// the current path
+	path string
+
 	ID string
 }
 
@@ -24,7 +27,7 @@ func NewHTTPSource() *HTTPSource {
 	h := &HTTPSource{}
 
 	// Add one to the waitgroup - a potential source must wait until at least
-	// PackTo have been called (otherwise PackerCloser will be nill and there)
+	// PackTo have been called (otherwise PackerCloser will be nil and there
 	// are no one to accept data
 	h.Add(1)
 	return h
@@ -58,4 +61,13 @@ func (h *HTTPSource) Accept(name string, rc io.ReadCloser) {
 	n, _ := io.Copy(ioutil.Discard, rc)
 	log.Printf("just discarded %s'es %d bytes", name, n)
 	h.Unlock()
+}
+
+// dirSync takes a directory where the next file should be placed
+// and walks around using PackerCloser's Enter and Exit functions
+func (h *HTTPSource) dirSync(incoming string) {
+	// dont do anything if we are already at the right location
+	if h.path == incoming {
+		return
+	}
 }
