@@ -60,7 +60,7 @@ func (h *HTTPSource) Packer() (packer.PackerCloser, error) {
 }
 
 // Accept accepts a POST request with a body containing a file
-func (h *HTTPSource) Accept(name string, rc io.Reader) error {
+func (h *HTTPSource) Accept(name string, size int64, r io.Reader) error {
 	// wait until we can be sure the PackerCloser have been
 	// set by a remote party
 	h.Wait()
@@ -75,7 +75,7 @@ func (h *HTTPSource) Accept(name string, rc io.Reader) error {
 		return fmt.Errorf("could not synchronize directories: %s", err)
 	}
 	_, filename := path.Split(name)
-	err = h.File(filename, os.FileMode(0664), 0, rc)
+	err = h.File(filename, os.FileMode(0664), size, r)
 	if err != nil {
 		return fmt.Errorf("could not send file: %s", err)
 	}

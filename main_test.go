@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"os"
@@ -115,19 +116,22 @@ func TestHTTPSourceToZip(t *testing.T) {
 
 			// check status code
 			if resp.StatusCode != http.StatusOK {
-				return fmt.Errorf("wrong status code when uploading file: %d", resp.StatusCode)
+				body, _ := ioutil.ReadAll(resp.Body)
+				return fmt.Errorf("wrong status code when uploading file: %d: %s", resp.StatusCode, string(body))
 			}
 			return nil
 		})
 		if err != nil {
-			t.Fatalf("failed walking test-directory: %s", err)
+			t.Logf("failed uploading test-directory: %s", err)
+			t.Fail()
 		}
 		wg.Done()
 	}()
 
 	err = downloadKnownPayload(fmt.Sprintf("%s/sink/%s.tar.gz", viper.Get("ADVERTISE_URL"), id))
 	if err != nil {
-		t.Fatalf("known payload failed: %s", err)
+		t.Logf("known payload failed: %s", err)
+		t.Fail()
 	}
 	wg.Wait()
 }
@@ -182,7 +186,7 @@ func downloadKnownPayload(url string) error {
 	}
 
 	defer response.Body.Close()
-
+	fmt.Printf("%s says contentlength is %d\n", url, response.ContentLength)
 	gzipReader, err := gzip.NewReader(response.Body)
 	if err != nil {
 		return fmt.Errorf("unable to read gzip: %s", err)

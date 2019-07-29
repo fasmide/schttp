@@ -160,5 +160,9 @@ func (s *Server) Source(w http.ResponseWriter, r *http.Request) {
 
 	// we know, that everything after [0] and [1] is the path of the file including its filename
 
-	hs.Accept(strings.Join(urlParts[3:], "/"), r.Body)
+	err := hs.Accept(strings.Join(urlParts[3:], "/"), r.ContentLength, r.Body)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("remote could not accept file: %s", err), http.StatusInternalServerError)
+		return
+	}
 }
