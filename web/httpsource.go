@@ -3,8 +3,7 @@ package web
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
-	"log"
+	"os"
 	"path"
 	"strings"
 	"sync"
@@ -28,7 +27,10 @@ type HTTPSource struct {
 type Path []string
 
 func (p Path) String() string {
-	return strings.Join(p, "/")
+	if len(p) == 0 {
+		return "/"
+	}
+	return fmt.Sprintf("/%s/", strings.Join(p, "/"))
 }
 
 func NewHTTPSource() *HTTPSource {
@@ -58,7 +60,7 @@ func (h *HTTPSource) Packer() (packer.PackerCloser, error) {
 }
 
 // Accept accepts a POST request with a body containing a file
-func (h *HTTPSource) Accept(name string, rc io.ReadCloser) {
+func (h *HTTPSource) Accept(name string, rc io.Reader) error {
 	// wait until we can be sure the PackerCloser have been
 	// set by a remote party
 	h.Wait()
@@ -67,9 +69,17 @@ func (h *HTTPSource) Accept(name string, rc io.ReadCloser) {
 	// can be handled at a time - others must wait
 	h.Lock()
 	defer h.Unlock()
-	h.dirSync(name)
-	n, _ := io.Copy(ioutil.Discard, rc)
-	log.Printf("just discarded %s'es %d bytes", name, n)
+
+	err := h.dirSync(name)
+	if err != nil {
+		return fmt.Errorf("could not synchronize directories: %s", err)
+	}
+	_, filename := path.Split(name)
+	err = h.File(filename, os.FileMode(0664), 0, rc)
+	if err != nil {
+		return fmt.Errorf("could not send file: %s", err)
+	}
+	return nil
 }
 
 // dirSync takes a directory where the next file should be placed
@@ -83,40 +93,47 @@ func (h *HTTPSource) dirSync(incoming string) error {
 		return nil
 	}
 
-	dirParts := strings.Split("/", dir)
+	f := func(c rune) bool {
+		return c == '/'
+	}
+	dirParts := strings.FieldsFunc(dir, f)
 
-	// first things first - if the length of where we want to go is shorter then where we are
-	// we need to move up
-	for len(dirParts) < len(h.path) {
-		err := h.PackerCloser.Exit()
+	// we need to figure out how many levels to exit
+	// we do this by looking at our own path and match every index in the destination path
+	// until they stop to match, then look at how meny extra levels are present in our own path and move up from them
+	// should we find that the current index does not exist in the destination path - we just need to level up dirs and then we are done
+	levelsToExit := 0
+	for i, p := range h.path {
+		if i >= len(dirParts) {
+			// if we are in a deeper level then our destination - we should level up
+			levelsToExit = len(h.path) - len(dirParts)
+			break
+		}
+
+		if p != dirParts[i] {
+			// if the current index does not match the destination index - this is where we need to level up from
+			levelsToExit = len(h.path) - i
+			break
+		}
+	}
+
+	// move up levelsToExit' times
+	for index := 0; index < levelsToExit; index++ {
+		err := h.Exit()
 		if err != nil {
-			return fmt.Errorf("could not move up from %s", h.path)
+			return fmt.Errorf("could not exit %s: %s", h.path, err)
 		}
 		h.path = h.path[:len(h.path)-1]
 	}
 
-	// walk into the destination until it differs from h.path - count the number of levels we
-	// need to move up
-	for i, n := range dirParts {
-		if h.path[i] == n {
-			// go deeper
-			continue
+	// if dirParts is longer we should move in
+	for index := len(h.path); len(dirParts) > len(h.path); index++ {
+		err := h.Enter(dirParts[index], os.FileMode(0664))
+		if err != nil {
+			return fmt.Errorf("could not enter %s: %s", dirParts[index], err)
 		}
-		c := len(dirParts)
-		for len(dirParts) != len(h.path) {
-			err := h.PackerCloser.Exit()
-			if err != nil {
-				return fmt.Errorf("could not move up from %s", h.path)
-			}
-			h.path = h.path[:len(h.path)-1]
-		}
-
-		break
-
+		h.path = append(h.path, dirParts[index])
 	}
-
-	// now it should be just a matter of moving into whatever dirParts have more then where h.path already are
-	for len(dirParts) != 
 
 	return nil
 }
