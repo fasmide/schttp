@@ -93,6 +93,10 @@ func (h *HTTPSource) Accept(name string, size int64, r io.Reader) error {
 }
 
 func (h *HTTPSource) Close() error {
+	// wait for a packerCloser in the unlikly event a user closes his source before a
+	// sink have turned up
+	h.waitPackerCloser.Wait()
+
 	err := h.PackerCloser.Close()
 	if err != nil {
 		return fmt.Errorf("unable to close packer: %s", err)

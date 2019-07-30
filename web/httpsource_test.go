@@ -8,7 +8,10 @@ import (
 
 func TestDirSync(t *testing.T) {
 	h := NewHTTPSource()
-	h.PackTo(&packerFixture{})
+
+	// hackish way to get around httpsource'es locking
+	go h.PackTo(&packerFixture{})
+	h.Close()
 
 	h.dirSync("/hej/hej")
 	if h.path.String() != "/hej/" {

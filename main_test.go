@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -27,6 +26,14 @@ import (
 
 // KnownTestDirectoryHash is the md5 digest of test-directory filenames and contents
 const KnownTestDirectoryHash = "3e8a7eddba29589d389dc65082f840c6"
+
+// filepath.Walk reads the directory in another order then the scp command
+// does - here is the order they need to be shipped in order to match the known test directory hash above
+var TestDirectoryItems = []string{
+	"test-directory/tekst.txt",
+	"test-directory/levelone/doubleleveltwo/emptyfile",
+	"test-directory/levelone/leveltwo/forest-sunbeams-trees-sunlight-70365.jpeg",
+}
 
 var scpPort, httpPort int
 
@@ -88,42 +95,41 @@ func TestHTTPSourceToZip(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		err := filepath.Walk("test-directory/", func(p string, info os.FileInfo, err error) error {
-			if err != nil {
-				return fmt.Errorf("unable to walk path %s: %s", p, info)
-			}
-
-			// skip directories
-			if info.IsDir() {
-				return nil
-			}
-
+		for _, p := range TestDirectoryItems {
 			// read test file
 			fd, err := os.Open(p)
 			if err != nil {
-				return fmt.Errorf("could not read file %s: %s", p, err)
+				t.Logf("could not read file: %s", err)
+				t.Fail()
+				break
 			}
+
+			// stat the file to figure out its size
+			info, err := os.Stat(p)
+			if err != nil {
+				t.Logf("could not stat file %s: %s", p, err)
+				t.Fail()
+				break
+			}
+
 			req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s%s/%s/%s", viper.Get("ADVERTISE_URL"), "source", id, p), fd)
 			req.ContentLength = info.Size()
 
 			// http post test file
 			resp, err = http.DefaultClient.Do(req)
 			if err != nil {
-				return fmt.Errorf("could not send file: %s", err)
+				t.Logf("could not http post file: %s", err)
+				t.Fail()
+				break
 			}
 
 			// check status code
 			if resp.StatusCode != http.StatusOK {
 				body, _ := ioutil.ReadAll(resp.Body)
-				return fmt.Errorf("wrong status code when uploading file (%s %d bytes): %d: %s", info.Name(), info.Size(), resp.StatusCode, string(body))
+				t.Logf("wrong status code when uploading file (%s): %d: %s", p, resp.StatusCode, string(body))
+				t.Fail()
 			}
-			return nil
-		})
-		if err != nil {
-			t.Logf("failed uploading test-directory: %s", err)
-			t.Fail()
 		}
-
 		_, err = http.Get(fmt.Sprintf("%s%s/%s", viper.Get("ADVERTISE_URL"), "closesource", id))
 		if err != nil {
 			t.Logf("failed to close source: %s", err)
@@ -218,10 +224,11 @@ func downloadKnownPayload(url string) error {
 		}
 
 		// then the whole content of the file
-		_, err = io.Copy(h, tarReader)
+		n, err := io.Copy(h, tarReader)
 		if err != nil {
 			return fmt.Errorf("could not update md5 digest: %s", err)
 		}
+		fmt.Printf("Added %s with %d bytes to md5sum\n", header.Name, n)
 	}
 
 	hexSum := fmt.Sprintf("%x", h.Sum(nil))
