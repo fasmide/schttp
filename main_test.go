@@ -130,7 +130,7 @@ func TestHTTPSourceToZip(t *testing.T) {
 				t.Fail()
 			}
 		}
-		_, err = http.Get(fmt.Sprintf("%s%s/%s", viper.Get("ADVERTISE_URL"), "closesource", id))
+		_, err := http.Get(fmt.Sprintf("%s%s/%s", viper.Get("ADVERTISE_URL"), "closesource", id))
 		if err != nil {
 			t.Logf("failed to close source: %s", err)
 			t.Fail()
