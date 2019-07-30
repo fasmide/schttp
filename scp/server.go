@@ -186,18 +186,18 @@ func (s *Server) acceptSCP(c net.Conn) {
 					fmt.Fprint(channel.Stderr(), "    You seem to have specified -p (preserve create and modified time) - this is ignored\n")
 				}
 
-				// sink (accept files)
+				// source (accept files)
 				if strings.Index(payload, "-t") >= 0 {
-					sink, err := NewSink(channel)
+					source, err := NewSource(channel)
 					if err != nil {
-						log.Printf("could not create new sink: %s", err)
+						log.Printf("could not create new source: %s", err)
 
 						// tell remote to go away
 						req.Reply(false, nil)
 						continue
 					}
 
-					log.Printf("Sink from %s, with id %s", c.RemoteAddr().String(), sink.ID)
+					log.Printf("source from %s, with id %s", c.RemoteAddr().String(), source.ID)
 
 					s.Lock()
 					// turn down request if we have been shutdown
