@@ -32,7 +32,7 @@ func (z *TarGz) File(name string, mode os.FileMode, size int64, r io.Reader) err
 		Size:    size,
 	})
 	if err != nil {
-		return fmt.Errorf("unable to create file: %s", err)
+		return fmt.Errorf("unable to write tar header: %s, %d bytes: %s", name, size, err)
 	}
 
 	_, err = io.Copy(z.tar, r)

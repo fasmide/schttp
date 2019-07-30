@@ -15,8 +15,10 @@ import (
 type HTTPSource struct {
 	// this packer must not be used without getting the lock first
 	packer.PackerCloser `json:"-"` // PackerCloser should not be json marshal'ed
-	sync.WaitGroup      `json:"-"`
+	waitPackerCloser    sync.WaitGroup
 	sync.Mutex          `json:"-"`
+
+	waitFinished sync.WaitGroup
 
 	// the current path
 	path Path
@@ -39,17 +41,25 @@ func NewHTTPSource() *HTTPSource {
 	// Add one to the waitgroup - a potential source must wait until at least
 	// PackTo have been called (otherwise PackerCloser will be nil and there
 	// are no one to accept data
-	h.Add(1)
+	h.waitPackerCloser.Add(1)
 	return h
 }
 
 // PackTo adds a packercloser to this source
+// it will also block until we are finished
 func (h *HTTPSource) PackTo(p packer.PackerCloser) error {
 	if h.PackerCloser != nil {
 		return fmt.Errorf("%s already have a sink", h.ID)
 	}
 	h.PackerCloser = p
-	h.Done()
+
+	// indicate to potential sources that a sink have arrived to accept data
+	h.waitPackerCloser.Done()
+
+	// wait for source to indicate no more data is coming
+	h.waitFinished.Add(1)
+	h.waitFinished.Wait()
+
 	return nil
 }
 
@@ -63,7 +73,7 @@ func (h *HTTPSource) Packer() (packer.PackerCloser, error) {
 func (h *HTTPSource) Accept(name string, size int64, r io.Reader) error {
 	// wait until we can be sure the PackerCloser have been
 	// set by a remote party
-	h.Wait()
+	h.waitPackerCloser.Wait()
 
 	// Furthermore - we must acquire a lock for this transfer - as only one file
 	// can be handled at a time - others must wait
@@ -79,6 +89,16 @@ func (h *HTTPSource) Accept(name string, size int64, r io.Reader) error {
 	if err != nil {
 		return fmt.Errorf("could not send file: %s", err)
 	}
+	return nil
+}
+
+func (h *HTTPSource) Close() error {
+	err := h.PackerCloser.Close()
+	if err != nil {
+		return fmt.Errorf("unable to close packer: %s", err)
+	}
+
+	h.waitFinished.Done()
 	return nil
 }
 

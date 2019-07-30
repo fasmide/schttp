@@ -103,13 +103,11 @@ func TestHTTPSourceToZip(t *testing.T) {
 			if err != nil {
 				return fmt.Errorf("could not read file %s: %s", p, err)
 			}
+			req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s%s/%s/%s", viper.Get("ADVERTISE_URL"), "source", id, p), fd)
+			req.ContentLength = info.Size()
 
 			// http post test file
-			resp, err = http.Post(
-				fmt.Sprintf("%s%s/%s/%s", viper.Get("ADVERTISE_URL"), "source", id, p),
-				"application/binary",
-				fd,
-			)
+			resp, err = http.DefaultClient.Do(req)
 			if err != nil {
 				return fmt.Errorf("could not send file: %s", err)
 			}
@@ -117,7 +115,7 @@ func TestHTTPSourceToZip(t *testing.T) {
 			// check status code
 			if resp.StatusCode != http.StatusOK {
 				body, _ := ioutil.ReadAll(resp.Body)
-				return fmt.Errorf("wrong status code when uploading file: %d: %s", resp.StatusCode, string(body))
+				return fmt.Errorf("wrong status code when uploading file (%s %d bytes): %d: %s", info.Name(), info.Size(), resp.StatusCode, string(body))
 			}
 			return nil
 		})
@@ -125,6 +123,13 @@ func TestHTTPSourceToZip(t *testing.T) {
 			t.Logf("failed uploading test-directory: %s", err)
 			t.Fail()
 		}
+
+		_, err = http.Get(fmt.Sprintf("%s%s/%s", viper.Get("ADVERTISE_URL"), "closesource", id))
+		if err != nil {
+			t.Logf("failed to close source: %s", err)
+			t.Fail()
+		}
+
 		wg.Done()
 	}()
 
@@ -186,7 +191,7 @@ func downloadKnownPayload(url string) error {
 	}
 
 	defer response.Body.Close()
-	fmt.Printf("%s says contentlength is %d\n", url, response.ContentLength)
+
 	gzipReader, err := gzip.NewReader(response.Body)
 	if err != nil {
 		return fmt.Errorf("unable to read gzip: %s", err)

@@ -44,6 +44,7 @@ func NewServer() *Server {
 	s.HandleFunc("/sink/", s.Sink)
 	s.HandleFunc("/source/", s.Source)
 	s.HandleFunc("/newsource/", s.NewSource)
+	s.HandleFunc("/closesource/", s.CloseSource)
 	s.Handle("/static/", http.FileServer(s.box))
 
 	// this is kind of a hack but im unable to make the packr.Box serve the index.html by it self
@@ -158,11 +159,38 @@ func (s *Server) Source(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	contentLength := int64(0)
+	// if CcontentLength is known
+	if r.ContentLength != -1 {
+		contentLength = r.ContentLength
+	}
 	// we know, that everything after [0] and [1] is the path of the file including its filename
-
-	err := hs.Accept(strings.Join(urlParts[3:], "/"), r.ContentLength, r.Body)
+	err := hs.Accept(strings.Join(urlParts[3:], "/"), contentLength, r.Body)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("remote could not accept file: %s", err), http.StatusInternalServerError)
+		return
+	}
+}
+
+// CloseSource closes a http source and indicates to a remote no more files are coming
+func (s *Server) CloseSource(w http.ResponseWriter, r *http.Request) {
+	urlParts := strings.Split(r.URL.Path, "/")
+
+	// we know that [1] is "/source/" and [2] should be our id
+	id := urlParts[2]
+
+	s.sourcesLock.RLock()
+	hs, exists := s.sources[id]
+	s.sourcesLock.RUnlock()
+
+	if !exists {
+		http.Error(w, fmt.Sprintf("No httpsource with id %s exists", id), http.StatusNotFound)
+		return
+	}
+
+	err := hs.Close()
+	if err != nil {
+		http.Error(w, fmt.Sprintf("could not close source: %s", err), http.StatusInternalServerError)
 		return
 	}
 }
