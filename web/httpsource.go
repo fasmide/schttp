@@ -63,12 +63,6 @@ func (h *HTTPSource) PackTo(p packer.PackerCloser) error {
 	return nil
 }
 
-// Packer is used to fulfill database.Transfer interface and returns an
-// error indicating this transfer is not able to accept files
-func (h *HTTPSource) Packer() (packer.PackerCloser, error) {
-	return nil, fmt.Errorf("%T cannot accept files", h)
-}
-
 // Accept accepts a POST request with a body containing a file
 func (h *HTTPSource) Accept(name string, size int64, r io.Reader) error {
 	// wait until we can be sure the PackerCloser have been

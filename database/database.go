@@ -13,7 +13,7 @@ func init() {
 	transfers = make(map[string]Transfer)
 }
 
-var lock sync.Mutex
+var lock sync.RWMutex
 var transfers map[string]Transfer
 
 // Add adds a transfer and returns its id
@@ -42,25 +42,23 @@ func Fetch(id string) (Transfer, error) {
 
 	delete(transfers, id)
 	return t, nil
-
 }
+
+//
 
 // Shutdown tells waiting transfers they need to reconnect
 func Shutdown(msg string) {
 	// TODO: handle shutdowns somehow
 }
 
-// Transfer does not care about direction
-// it is up to the transfer it self to return an error
-// if it is not able to accept or provide files
+// Transfer represents a waiting source
 type Transfer interface {
-	// Packer is used when sending files
-	// i.e. the transfer will provide a packer
-	// which the other end will put files and folders into
-	Packer() (packer.PackerCloser, error)
-
 	// PackTo is used when providing a packercloser to receive files
 	// i.e. you provide a packer which the other end will pack files
 	// and folders into
 	PackTo(packer.PackerCloser) error
+
+	// close is used when a transfer times out or we are shutting down
+	// database will provide reasoning in the string
+	Close(string)
 }

@@ -51,11 +51,6 @@ func NewSource(c ssh.Channel) (*Source, error) {
 	return s, nil
 }
 
-// Packer fullfills database.Transfer by providing an error message
-func (s *Source) Packer() (packer.PackerCloser, error) {
-	return nil, fmt.Errorf("%T cannot accept files", s)
-}
-
 // PackTo accepts a PackerCloser and adds files from the transfer to it
 func (s *Source) PackTo(p packer.PackerCloser) error {
 
