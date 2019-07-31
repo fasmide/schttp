@@ -66,7 +66,7 @@ var app = new Vue({
         // fetch an ID for this transfer
         fetch('/newsource/')
         .then(function(response) {
-            return response.json();
+            return response.json()
         })
         .then((myJson) => {
             this.id = myJson.ID
@@ -180,6 +180,7 @@ var app = new Vue({
             // should we work on this file?
             var file = this.files[0];
             if (file.state != "queued") {
+                this.closeTransfer()
                 return
             }
 
@@ -243,6 +244,15 @@ var app = new Vue({
             file.startedAt = Date.now()
             xhr.send(file.raw);
 
+        },
+        closeTransfer() {
+            fetch('/closesource/' + this.id)
+            .then(function(response) {
+                console.log(response)
+            })
+            .catch((err) => {
+                console.error("failed to close transfer:", err)
+            })
         }
     },
     computed: {
