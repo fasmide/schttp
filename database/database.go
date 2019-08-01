@@ -57,8 +57,4 @@ type Transfer interface {
 	// i.e. you provide a packer which the other end will pack files
 	// and folders into
 	PackTo(packer.PackerCloser) error
-
-	// close is used when a transfer times out or we are shutting down
-	// database will provide reasoning in the string
-	Close(string)
 }
