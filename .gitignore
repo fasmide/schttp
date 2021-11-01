@@ -1,3 +1,5 @@
 id_rsa*
 schttp
 schttp.pid
+main_host_*
+schttp_host_*
