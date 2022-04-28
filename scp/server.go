@@ -2,12 +2,12 @@ package scp
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
 	"strings"
 	"sync"
 
+	"github.com/fasmide/hostkeys"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -76,18 +76,13 @@ func NewServer() *Server {
 		},
 	}
 
-	// Read private key
-	privateBytes, err := ioutil.ReadFile("id_rsa")
-	if err != nil {
-		log.Fatal("Failed to load private key: ", err)
-	}
+	// hostkeys defaults to current work directory
+	m := &hostkeys.Manager{}
 
-	hostkey, err := ssh.ParsePrivateKey(privateBytes)
+	err := m.Manage(config)
 	if err != nil {
-		log.Fatal("Failed to parse private key: ", err)
+		log.Fatalf("unable to manage keys: %s", err)
 	}
-
-	config.AddHostKey(hostkey)
 
 	return &Server{
 		sshConfig: config,
